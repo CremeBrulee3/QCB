@@ -31,6 +31,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn import preprocessing
 from sklearn import manifold
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 
 ## ggplot
 plt.style.use('ggplot')
@@ -97,13 +98,9 @@ def GetCorrCoeff(struc_subset, PCA_T):                                          
     return corr_coeff
 
 
-## Do PCA on scaled whole dataset. Returns exp_var_ratio and matrix T
-## Principal Component Analysis
-def GraphPCA(struc_scaled, mapping, color_selection, addtotitle=None):
-    pca = PCA(n_components = 3, svd_solver = "randomized")
-    pca.fit(struc_scaled)
-    T = pca.transform(struc_scaled)
-        
+## Plot 3D graphs of dimensionality reduction (PCA, LDA, Isomap)
+def PlotT(T, mapping, color_selection, graphtype=None, addtotitle=None):
+    
     T_lab = pd.DataFrame({
             'drug_label': nom_cols['drug_label'],
             'C1': T[:,0],
@@ -113,7 +110,7 @@ def GraphPCA(struc_scaled, mapping, color_selection, addtotitle=None):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection = '3d')
     
-    ax.set_title('PCA of {} {}'.format(STRUCTURE, addtotitle))
+    ax.set_title('{} of {} {}'.format(graphtype, STRUCTURE, addtotitle))
     ax.set_xlabel('Component 1')
     ax.set_ylabel('Component 2')
     ax.set_zlabel('Component 3')
@@ -123,16 +120,13 @@ def GraphPCA(struc_scaled, mapping, color_selection, addtotitle=None):
         xyz = T_lab.groupby('drug_label').get_group(drug)
         color = color_selection[index]
         ax.scatter(xyz['C1'], xyz['C2'], xyz['C3'], 
-                   c=color, label=drug)
+                   c=color, label=drug, alpha=0.75)
     
     ## Plot
     plt.legend()
     plt.show()
-
-    ## Percentage of variance explained by each of the selected components
-    pca_expl_var = pca.explained_variance_ratio_
     
-    return T_lab, pca_expl_var
+    return T_lab
 
 ## Find the correlation coefficient for all three PC's. Returns corr table
 def GetCorrTable(struc_scaled, T_lab, sort_by='Abs(C2)'):
@@ -232,36 +226,8 @@ def PlotScatter(dff, plot_foi, x_lab='dna_volume', y_lab='mem_volume'):
         plt.show()    
         
 
-def PlotIsomap(iso_df, addtotitle=None):
-    iso = manifold.Isomap(n_neighbors=4, n_components=3)
-    T = iso.fit_transform(iso_df)
-    
-    T_lab = pd.DataFrame({
-            'drug_label': nom_cols['drug_label'],
-            'C1': T[:,0],
-            'C2': T[:,1],
-            'C3': T[:,2]})
-            
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection = '3d')
-    
-    ax.set_title('Isomap of {} {}'.format(STRUCTURE, addtotitle))
-    ax.set_xlabel('Component 1')
-    ax.set_ylabel('Component 2')
-    ax.set_zlabel('Component 3')
-    
-    for index in mapping:
-        drug = mapping[index]
-        xyz = T_lab.groupby('drug_label').get_group(drug)
-        color = color_selection[index]
-        ax.scatter(xyz['C1'], xyz['C2'], xyz['C3'], 
-                   c=color, label=drug, alpha=0.75)
-    
-    ## Plot
-    plt.legend()
-    plt.show()
-    
-    return T_lab
+
+
 
 # %% GLOBAL VARIABLES
     
@@ -361,9 +327,9 @@ counts_table = GetConditionCounts('structure_name', 'drug_label')
 struc_count = counts_table[(counts_table.structure_name == STRUCTURE)] 
 
 
-# %% VISUALIZING DATA
+# %%    ###############  VISUALIZING DATA ########################
 
-## Scale all features and visualize by PCA
+## Make subsets, dictionary, color mapping
 
 struc_subset = df.groupby(by='structure_name').get_group(STRUCTURE)
 ## Save out nominal columns
@@ -382,32 +348,62 @@ d = {'DNA Features': DNA_FOI,
      'Structure Features': STRUC_FOI,
      'All Features': ALL_FOI}
 
+# %% PCA
 ## Graphing PCA by above feature categories and getting tables
-PCA_results={}
+PCA_results = {}
 sort_by = 'Abs(C1)'
 for key, foi in d.items():
     struc_subset_copy = struc_subset[foi]
     struc_scaled = scaleFeaturesDF(struc_subset_copy)                           ## Scale features for pre-processing for PCA
-
+    pca = PCA(n_components = 3, svd_solver = "randomized")
+    pca.fit(struc_scaled)
+    T = pca.transform(struc_scaled)
     ## Graph PCA and get correlation table of original features to each PC
-    [T_lab, pca_expl_var] = GraphPCA(struc_scaled, mapping, color_selection,
-                                        addtotitle = ': {}'.format(key))
+    T_lab = PlotT(T, mapping, color_selection, graphtype='PCA', 
+                  addtotitle = ': {}'.format(key))
     Corr_Table = GetCorrTable(struc_scaled, T_lab, sort_by = sort_by)
+    
+    pca_expl_var = pca.explained_variance_ratio_
     PCA_results.update({'{}'.format(key): {'T_lab': T_lab,
                                             'pca_expl_var': pca_expl_var,
                                             'Corr_Table': Corr_Table}})
 
+# %% ISOMAP
+    
 ## Isomap for nonlinear dimensionality reduction
+
 Iso_results = {}
 sort_by = 'Abs(C2)'
 for key, foi in d.items():
-    iso_df = struc_subset[foi]                                                  ## Structure FOI's
-    T_lab = PlotIsomap(iso_df, addtotitle = ': {}'.format(key))
+    iso_df = struc_subset[foi]
+    iso = manifold.Isomap(n_neighbors=4, n_components=3)
+    T = iso.fit_transform(iso_df)
+    T_lab = PlotT(T, mapping, color_selection, graphtype='Isomap', 
+                  addtotitle = ': {}'.format(key))
     Iso_Corr_Table = GetCorrTable(struc_scaled, T_lab, sort_by = sortby)
     Iso_results.update({'{}'.format(key): {'Corr_Table': Iso_Corr_Table}})
-    
+
+# %% LDA - Linear Discriminant Analysis 
+LDA_results = {}
+sort_by = 'Abs(C1)'
+for key, foi in d.items():
+    lda_df = struc_subset[foi]
+    lda = LDA(n_components = 3)
+    T = lda.fit_transform(lda_df, y=nom_cols['drug_label'])
+    T_lab = PlotT(T, mapping, color_selection, graphtype='LDA',
+                  addtotitle = ': {}'.format(key))
+    Corr_Table = GetCorrTable(struc_scaled, T_lab, sort_by = sortby)
+    exp_var_ratio = lda.explained_variance_ratio_
+    LDA_results.update({'{}'.format(key): {'T_lab': T_lab,
+                                            'exp_var_ratio': exp_var_ratio,
+                                            'Corr_Table': Corr_Table}})
 # %% STATISTICS
 
+"""
+Implement starting with the mean first? and then looking at which group is 
+significant? How different the means are, std, etc. 
+
+"""
 ## Preliminary stats
 compare = struc_subset_copy
 compare['drug_label'] = nom_cols['drug_label']                                  ## Need drug_label column to pass into CompareVar
@@ -442,9 +438,7 @@ plot_foi = STRUC_FOI                                                            
 PlotScatter(struc_subset, plot_foi)
 #PlotScatter(struc_subset, ['structure_meridional_eccentricity'], y_lab='dna_meridional_eccentricity')
 
-#############################################################################
-
-
+# %% TEST AREA
 
 #counts_table.to_csv("C:/Users/winniel/Desktop/counts.csv")
 # Parallel Coordinates Start Here:
