@@ -186,19 +186,27 @@ def PlotViolin(df, features, plot_order):
         ax = sns.violinplot(data=df, x="drug_label", y=feature, 
                        palette="Pastel1", order=plot_order)
 
-def PlotScatterBox(df, features, plot_order):
+## Plot Scatter plot for each category with 95% confidence interval
+def PlotScatterCI(df, features, plot_order):
     # Set up the matplotlib figure
     sns.set(style="darkgrid")
     for feature in features:
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
+        ax = sns.pointplot(x='drug_label', y=feature, data=df, ci=95, size=3,
+                           color='k', join=False, order=plot_order,
+                           estimator=np.mean)
         
-        ax = sns.stripplot(x='drug_label', y=feature, data=df, jitter=True,
-                           palette="Pastel1", order=plot_order)
-        # Draw a boxplot
-        ax = sns.boxplot(x='drug_label', y=feature, data=df, order=plot_order)
+        ## Make sure pointplot on top                                           
+        plt.setp(ax.lines, zorder=100)
+        plt.setp(ax.collections, zorder=100, label="")
         
+        sns.stripplot(x='drug_label', y=feature, data=df, jitter=True,
+                          palette="Pastel1", edgecolor='k', size=5, 
+                          order=plot_order)
+                                                           
+
         
 ## 3D scatter plot: dff = dataset, plot_foi = list of features to plot
 ## x and y_lab are feature names on x and y axis
@@ -428,13 +436,18 @@ for i in range(0, len(mapping)):
 plot_order = ['Vehicle',
               'Brefeldin',
               'Paclitaxol',
-              'Staurosporine']                                          ## for plotting only these 2
+              'Staurosporine']                                          
 
 ## Violin Plot: density plot with quartiles & 95% CI                           
-PlotViolin(struc_subset, STRUC_FOI, plot_order)
-PlotScatterBox(struc_subset, STRUC_FOI, plot_order)
+#PlotViolin(struc_subset, STRUC_FOI, plot_order)
+PlotScatterCI(struc_subset, STRUC_FOI, plot_order)
+
+ 
+
+# %% Scatter plots                                                              ## features to plot
+
 ## 3D scatter plots over DNA volume and membrane volume
-plot_foi = STRUC_FOI                                                            ## features to plot
+plot_foi = STRUC_FOI  
 PlotScatter(struc_subset, plot_foi)
 #PlotScatter(struc_subset, ['structure_meridional_eccentricity'], y_lab='dna_meridional_eccentricity')
 
