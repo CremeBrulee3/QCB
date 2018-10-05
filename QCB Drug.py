@@ -36,9 +36,9 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 ## ggplot
 plt.style.use('ggplot')
 
-# %% LOADING DATASETS
+# %% OLD DATASET. DO NOT USE. FOR REFERENCE ONLY
 
-## Code from Jianxu
+## Code from Jianxu - orginal abridged dataset
 
 ## connect to database(prod)
 prod = dsdb.DatasetDatabase(config="//allen/aics/assay-dev/Analysis/QCB_database/prod_config.json")
@@ -53,6 +53,43 @@ df_merge = pd.merge(ds_meta.ds, ds_fea.ds, on='cell_id', how='inner')
 ## Coerce it to dataframe
 df = pd.DataFrame(df_merge)
 
+
+# %% LOAD DATASET: Extended golgi, tubulin, sec61 dataset from Matheus
+## connect to database(prod)
+prod = dsdb.DatasetDatabase(config="//allen/aics/assay-dev/Analysis/QCB_database/prod_config.json")
+
+## load features from golgi
+ds_meta = prod.get_dataset(name='QCB_drug_cell_meta')
+ds_dna_fea = prod.get_dataset(name='QCB_DRUG_DNA_feature')
+ds_mem_fea = prod.get_dataset(name='QCB_DRUG_MEM_feature')
+ds_gol_fea = prod.get_dataset(name='QCB_DRUG_ST6GAL_feature')
+ds_tub_fea = prod.get_dataset(name='QCB_DRUG_TUBA1B_feature')
+ds_sec_fea = prod.get_dataset(name='QCB_DRUG_SEC61B_feature')
+
+# %% Making dataframe with all features and meta data 
+
+## Concatenate structure features table
+struc_fea = pd.concat([ds_gol_fea.ds,
+                     ds_tub_fea.ds,
+                     ds_sec_fea.ds], axis = 0)
+
+## Inner join between dna and mem features
+df_dna_mem_merge = pd.merge(ds_dna_fea.ds, 
+                            ds_mem_fea.ds,
+                            on='cell_id', how='inner')
+
+## Merge with dna/mem/struc_fea
+df_allfea_merge = pd.merge(df_dna_mem_merge, 
+                            struc_fea,
+                            on='cell_id', how='inner')
+
+## Merge meta with all features
+df_merge = pd.merge(df_allfea_merge,
+                    ds_meta.ds,
+                    on='cell_id', how='inner')
+
+## Coerce it to dataframe
+df = pd.DataFrame(df_merge)
 
 # %% FUNCTIONS
 ## Method to count number of entries in each structure and drug, returns table 
@@ -129,12 +166,12 @@ def PlotT(T, mapping, color_selection, graphtype=None, addtotitle=None):
     return T_lab
 
 ## Find the correlation coefficient for all three PC's. Returns corr table
-def GetCorrTable(struc_scaled, T_lab, sort_by='Abs(C2)'):
-    C1_corr = GetCorrCoeff(struc_scaled, T_lab['C1'])                         ## same correlation using original scaled or unscaled
-    C2_corr = GetCorrCoeff(struc_scaled, T_lab['C2'])
-    C3_corr = GetCorrCoeff(struc_scaled, T_lab['C3'])
+def GetCorrTable(struc_subset, T_lab, sort_by='Abs(C2)'):
+    C1_corr = GetCorrCoeff(struc_subset, T_lab['C1'])                         ## same correlation using original scaled or unscaled
+    C2_corr = GetCorrCoeff(struc_subset, T_lab['C2'])
+    C3_corr = GetCorrCoeff(struc_subset, T_lab['C3'])
     
-    corr_table = pd.DataFrame({'Feature': list(struc_scaled),
+    corr_table = pd.DataFrame({'Feature': list(struc_subset),
                                'Abs(C1)': [abs(x) for x in C1_corr],
                                'Abs(C2)': [abs(y) for y in C2_corr],
                                'Abs(C3)': [abs(z) for z in C3_corr],
@@ -234,9 +271,6 @@ def PlotScatter(dff, plot_foi, x_lab='dna_volume', y_lab='mem_volume'):
         plt.show()    
         
 
-
-
-
 # %% GLOBAL VARIABLES
     
 STRUCTURE = 'golgi'
@@ -244,80 +278,25 @@ NOM_COLS = ['drug_label', 'cell_id', 'cell_ver', 'czi_filename',
                    'idx_in_stack', 'roi', 'str_ver', 'structure_name']
 
 ## Features of interest
-
-ALL_FOI = ['dna_1st_axis_length',
-     'dna_1st_eigenvalue',
-     'dna_2nd_axis_length',
-     'dna_2nd_eigenvalue',
-     'dna_3rd_axis_length',
-     'dna_3rd_eigenvalue',
-     'dna_equator_eccentricity',
-     'dna_meridional_eccentricity',
-     'dna_sphericity',
-     'dna_surface_area',
-     'dna_volume',
-     'mem_1st_axis_length',
-     'mem_1st_eigenvalue',
-     'mem_2nd_axis_length',
-     'mem_2nd_eigenvalue',
-     'mem_3rd_axis_length',
-     'mem_3rd_eigenvalue',
-     'mem_equator_eccentricity',
-     'mem_meridional_eccentricity',
-     'mem_sphericity',
-     'mem_surface_area',
-     'mem_volume',
-     'structure_1st_axis_length',
-     'structure_1st_eigenvalue',
-     'structure_2nd_axis_length',
-     'structure_2nd_eigenvalue',
-     'structure_3rd_axis_length',
-     'structure_3rd_eigenvalue',
-     'structure_equator_eccentricity',
-     'structure_meridional_eccentricity',
-     'structure_sphericity',
-     'structure_surface_area',
-     'structure_volume']
-
-DNA_FOI = ['dna_1st_axis_length',
-           'dna_1st_eigenvalue',
-           'dna_2nd_axis_length',
-           'dna_2nd_eigenvalue',
-           'dna_3rd_axis_length',
-           'dna_3rd_eigenvalue',
-           'dna_equator_eccentricity',
-           'dna_meridional_eccentricity',
-           'dna_sphericity',
-           'dna_surface_area',
-           'dna_volume']
+STRUC_FEA_DIC = {'golgi': list(ds_gol_fea.ds),
+                 'tubulin': list(ds_tub_fea.ds),
+                 'sec61b': list(ds_sec_fea.ds)}
 
 
-MEM_FOI = ['mem_1st_axis_length',
-           'mem_1st_eigenvalue',
-           'mem_2nd_axis_length',
-           'mem_2nd_eigenvalue',
-           'mem_3rd_axis_length',
-           'mem_3rd_eigenvalue',
-           'mem_equator_eccentricity',
-           'mem_meridional_eccentricity',
-           'mem_sphericity',
-           'mem_surface_area',
-           'mem_volume']
 
-STRUC_FOI = ['structure_1st_axis_length',
-             'structure_1st_eigenvalue',
-             'structure_2nd_axis_length',
-             'structure_2nd_eigenvalue',
-             'structure_3rd_axis_length',
-             'structure_3rd_eigenvalue',
-             'structure_equator_eccentricity',
-             'structure_meridional_eccentricity',
-             'structure_sphericity',
-             'structure_surface_area',
-             'structure_volume']
+DNA_FOI = list(ds_dna_fea.ds)
+DNA_FOI.remove('cell_id')
+
+MEM_FOI = list(ds_mem_fea.ds)
+MEM_FOI.remove('cell_id')
+
+STRUC_FOI = STRUC_FEA_DIC.get(STRUCTURE)
+STRUC_FOI.remove('cell_id')
+
+ALL_FOI = DNA_FOI + MEM_FOI + STRUC_FOI
 
 ## Which FOI list to use
-FOI = STRUC_FOI
+FOI = ALL_FOI
 
 # %% CREATE SUBSETS AND COUNT
   
@@ -343,12 +322,26 @@ struc_subset = df.groupby(by='structure_name').get_group(STRUCTURE)
 ## Save out nominal columns
 nom_cols = struc_subset[NOM_COLS]
 
+## Drop columns with NA's (features loaded from another structure)
+#struc_subset.dropna(axis=1, inplace=True)
+struc_subset = struc_subset[FOI]
+#struc_subset.dropna
+
+## subset where number of components = 0
+no_comp = struc_subset[(struc_subset['str_number_of_components']==0)]
+
+## Need to make 2 different subsets. with and without per_struc_measurements
+one_comp = struc_subset[(struc_subset['str_number_of_components']==1)]
+
 ## get color mapping of drug to color
 ## Change the drug_label column to category dtypes and change to codes
 struc_subset['drug_label'] = struc_subset['drug_label'].astype("category")
 mapping = dict(enumerate(struc_subset['drug_label'].cat.categories))
 #struc_subset['drug_label'] = struc_subset['drug_label'].cat.codes
-color_selection = ['b', 'g', 'k', 'y', 'r']
+color_map = ['b', 'g', 'k', 'y', 'r', 'm', 'c']
+
+## assign color per drug
+color_selection = [color_map[index] for index in range(0,len(mapping))]
 
 ## Dictionary of feature grouping
 d = {'DNA Features': DNA_FOI, 
@@ -369,7 +362,7 @@ for key, foi in d.items():
     ## Graph PCA and get correlation table of original features to each PC
     T_lab = PlotT(T, mapping, color_selection, graphtype='PCA', 
                   addtotitle = ': {}'.format(key))
-    Corr_Table = GetCorrTable(struc_scaled, T_lab, sort_by = sort_by)
+    Corr_Table = GetCorrTable(struc_scaled[FOI], T_lab, sort_by = sort_by)
     
     pca_expl_var = pca.explained_variance_ratio_
     PCA_results.update({'{}'.format(key): {'T_lab': T_lab,
@@ -388,19 +381,21 @@ for key, foi in d.items():
     T = iso.fit_transform(iso_df)
     T_lab = PlotT(T, mapping, color_selection, graphtype='Isomap', 
                   addtotitle = ': {}'.format(key))
-    Iso_Corr_Table = GetCorrTable(struc_scaled, T_lab, sort_by = sortby)
+    Iso_Corr_Table = GetCorrTable(struc_subset[FOI], T_lab, sort_by = sort_by)
     Iso_results.update({'{}'.format(key): {'Corr_Table': Iso_Corr_Table}})
 
 # %% LDA - Linear Discriminant Analysis 
+    
+d = {'All Features': ALL_FOI}
 LDA_results = {}
-sort_by = 'Abs(C1)'
+sortby = 'Abs(C1)'
 for key, foi in d.items():
     lda_df = struc_subset[foi]
     lda = LDA(n_components = 3)
     T = lda.fit_transform(lda_df, y=nom_cols['drug_label'])
     T_lab = PlotT(T, mapping, color_selection, graphtype='LDA',
                   addtotitle = ': {}'.format(key))
-    Corr_Table = GetCorrTable(struc_scaled, T_lab, sort_by = sortby)
+    Corr_Table = GetCorrTable(struc_subset, T_lab, sort_by = sortby)
     exp_var_ratio = lda.explained_variance_ratio_
     LDA_results.update({'{}'.format(key): {'T_lab': T_lab,
                                             'exp_var_ratio': exp_var_ratio,
@@ -453,7 +448,15 @@ PlotScatter(struc_subset, plot_foi)
 
 # %% TEST AREA
 
-#counts_table.to_csv("C:/Users/winniel/Desktop/counts.csv")
+df.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\df.csv')
+
+ds_gol_fea.ds.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\ds_gol_fea.csv')
+ds_tub_fea.ds.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\ds_tub_fea.csv')
+ds_sec_fea.ds.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\ds_sec_fea.csv')
+ds_dna_fea.ds.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\ds_dna_fea.csv')
+ds_mem_fea.ds.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\ds_mem_fea.csv')
+
+# %%
 # Parallel Coordinates Start Here:
 plt.figure()
 parallel_coordinates(compare_drug_scaled, 'drug_label')
