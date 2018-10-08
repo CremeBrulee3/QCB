@@ -230,7 +230,8 @@ def PlotScatterCI(df, features, plot_order):
     for feature in features:
         fig = plt.figure()
         ax = fig.add_subplot(111)
-
+        ax.set_title('{}: {}'.format(STRUCTURE, feature))
+        
         ax = sns.pointplot(x='drug_label', y=feature, data=df, ci=95, size=3,
                            color='k', join=False, order=plot_order,
                            estimator=np.mean)
@@ -245,9 +246,36 @@ def PlotScatterCI(df, features, plot_order):
                                                            
 
         
+## 2D scatter plot: dff = dataset, plot_foi = list of features to plot
+## x and y_lab are feature names on x and y axis
+def PlotScatter2D(dff, plot_foi, x_lab='dna_volume'):
+    for foi in plot_foi:
+        
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        y_lab = foi
+    
+        ax.set_title('{}: {}'.format(STRUCTURE, foi))
+        ax.set_xlabel('{}'.format(x_lab))
+        ax.set_ylabel('{}'.format(y_lab))
+        
+        for index in mapping:
+            drug = mapping[index]
+            try:
+                drug_group = dff.groupby('drug_label').get_group(drug)
+                color = color_selection[index]
+                ax.scatter(drug_group[x_lab], drug_group[y_lab],
+                           c=color, label=drug)
+            except:
+                print('Skipped plotting {}'.format(drug))
+                pass
+        ## Plot
+        plt.legend()
+        plt.show()    
+
 ## 3D scatter plot: dff = dataset, plot_foi = list of features to plot
 ## x and y_lab are feature names on x and y axis
-def PlotScatter(dff, plot_foi, x_lab='dna_volume', y_lab='mem_volume'):
+def PlotScatter3D(dff, plot_foi, x_lab='dna_volume', y_lab='mem_volume'):
     for foi in plot_foi:
         
         fig = plt.figure()
@@ -273,16 +301,14 @@ def PlotScatter(dff, plot_foi, x_lab='dna_volume', y_lab='mem_volume'):
 
 # %% GLOBAL VARIABLES
     
-STRUCTURE = 'golgi'
+STRUCTURE = 'tubulin'
 NOM_COLS = ['drug_label', 'cell_id', 'cell_ver', 'czi_filename', 
-                   'idx_in_stack', 'roi', 'str_ver', 'structure_name']
+            'idx_in_stack', 'roi', 'str_ver', 'structure_name']
 
 ## Features of interest
 STRUC_FEA_DIC = {'golgi': list(ds_gol_fea.ds),
                  'tubulin': list(ds_tub_fea.ds),
                  'sec61b': list(ds_sec_fea.ds)}
-
-
 
 DNA_FOI = list(ds_dna_fea.ds)
 DNA_FOI.remove('cell_id')
@@ -316,28 +342,33 @@ struc_count = counts_table[(counts_table.structure_name == STRUCTURE)]
 
 # %%    ###############  VISUALIZING DATA ########################
 
+%matplotlib auto
+
 ## Make subsets, dictionary, color mapping
 
 struc_subset = df.groupby(by='structure_name').get_group(STRUCTURE)
 ## Save out nominal columns
 nom_cols = struc_subset[NOM_COLS]
 
-## Drop columns with NA's (features loaded from another structure)
-#struc_subset.dropna(axis=1, inplace=True)
-struc_subset = struc_subset[FOI]
-#struc_subset.dropna
+## fill struc_subset with DNA, MEM, and STR features
+struc_subset = struc_subset[ALL_FOI]
 
+## list of columns that start with 'str' and ends with 'std'
+str_std_list = list(one_comp.filter(regex='^str.*std$'))
+str_list = list(one_comp.filter(regex='^str'))
+
+"""
 ## subset where number of components = 0
 no_comp = struc_subset[(struc_subset['str_number_of_components']==0)]
 
 ## Need to make 2 different subsets. with and without per_struc_measurements
 one_comp = struc_subset[(struc_subset['str_number_of_components']==1)]
-
+"""
 ## get color mapping of drug to color
 ## Change the drug_label column to category dtypes and change to codes
+struc_subset['drug_label'] = nom_cols['drug_label']
 struc_subset['drug_label'] = struc_subset['drug_label'].astype("category")
 mapping = dict(enumerate(struc_subset['drug_label'].cat.categories))
-#struc_subset['drug_label'] = struc_subset['drug_label'].cat.codes
 color_map = ['b', 'g', 'k', 'y', 'r', 'm', 'c']
 
 ## assign color per drug
@@ -349,12 +380,81 @@ d = {'DNA Features': DNA_FOI,
      'Structure Features': STRUC_FOI,
      'All Features': ALL_FOI}
 
+# %% CUSTOMIZE FOI
+## Customized foi
+export_dir = r'C:\Users\Winnie\Desktop\QCB\Feature lists'
+exp_df = pd.DataFrame(STRUC_FOI)
+exp_df.to_csv(os.path.join(export_dir, '{}_STRUC_FOI.csv'.format(STRUCTURE)),
+                 header=False, index = False)
+
+"""
+## sec61b
+foi = ['str_1st_axis_length_mean',
+        'str_2nd_axis_length_mean',
+        'str_3rd_axis_length_mean',
+        'str_equator_eccentricity_mean',
+        'str_surface_area_mean',
+        'str_volume_mean',
+        'str_meridional_eccentricity_mean',
+        'str_number_of_components',
+        'str_skeleton_edge_vol_mean',
+        'str_skeleton_vol_mean',
+        'str_sphericity_mean']
+
+## golgi
+foi = ['str_1st_axis_length_mean',
+        'str_2nd_axis_length_mean',
+        'str_3rd_axis_length_mean',
+        'str_equator_eccentricity_mean',
+        'str_meridional_eccentricity_mean',
+        'str_number_of_components',
+        'str_sphericity_mean',
+        'str_surface_area_mean',
+        'str_volume_mean']
+"""
+## tubulin
+foi = ['str_1st_axis_length_mean',
+        'str_2nd_axis_length_mean',
+        'str_3rd_axis_length_mean',
+        'str_equator_eccentricity_mean',
+        'str_meridional_eccentricity_mean',
+        'str_number_of_components',
+        'str_sphericity_mean',
+        'str_skeleton_edge_vol_mean',
+        'str_skeleton_prop_deg0_mean',
+        'str_skeleton_prop_deg1_mean',
+        'str_skeleton_prop_deg3_mean',
+        'str_skeleton_prop_deg4p_mean',
+        'str_skeleton_vol_mean',
+        'str_surface_area_mean',
+        'str_volume_mean']
+
+## Run this if selected feature
+d = {'Selected Structure Features': foi}
+
+# %% Get Plot/Table order of drugs - Vehicle first
+
+## plot_order - select which drug groups to plot
+plot_order = ['Vehicle']
+for i in range(0, len(mapping)):
+    if mapping[i] not in plot_order:
+        plot_order.append(mapping[i])  
+
+# %% Fill NaN's with 0's - necessary to run this before PCA/ISOMAP/LDA
+
+## Turn NaN values into 0's (with number of structure components = 0 and 1)
+struc_subset = struc_subset[ALL_FOI]
+#struc_subset_filled = struc_subset.fillna(0, inplace=False)
+struc_subset_filled = struc_subset
+
 # %% PCA
 ## Graphing PCA by above feature categories and getting tables
+## run fillna block first
+
 PCA_results = {}
 sort_by = 'Abs(C1)'
 for key, foi in d.items():
-    struc_subset_copy = struc_subset[foi]
+    struc_subset_copy = struc_subset_filled[foi]
     struc_scaled = scaleFeaturesDF(struc_subset_copy)                           ## Scale features for pre-processing for PCA
     pca = PCA(n_components = 3, svd_solver = "randomized")
     pca.fit(struc_scaled)
@@ -362,7 +462,7 @@ for key, foi in d.items():
     ## Graph PCA and get correlation table of original features to each PC
     T_lab = PlotT(T, mapping, color_selection, graphtype='PCA', 
                   addtotitle = ': {}'.format(key))
-    Corr_Table = GetCorrTable(struc_scaled[FOI], T_lab, sort_by = sort_by)
+    Corr_Table = GetCorrTable(struc_scaled[foi], T_lab, sort_by = sort_by)
     
     pca_expl_var = pca.explained_variance_ratio_
     PCA_results.update({'{}'.format(key): {'T_lab': T_lab,
@@ -371,12 +471,12 @@ for key, foi in d.items():
 
 # %% ISOMAP
     
-## Isomap for nonlinear dimensionality reduction
+## Isomap for nonlinear dimensionality reduction - run fillna block first
 
 Iso_results = {}
 sort_by = 'Abs(C2)'
 for key, foi in d.items():
-    iso_df = struc_subset[foi]
+    iso_df = struc_subset_filled[foi]
     iso = manifold.Isomap(n_neighbors=4, n_components=3)
     T = iso.fit_transform(iso_df)
     T_lab = PlotT(T, mapping, color_selection, graphtype='Isomap', 
@@ -384,29 +484,86 @@ for key, foi in d.items():
     Iso_Corr_Table = GetCorrTable(struc_subset[FOI], T_lab, sort_by = sort_by)
     Iso_results.update({'{}'.format(key): {'Corr_Table': Iso_Corr_Table}})
 
-# %% LDA - Linear Discriminant Analysis 
-    
-d = {'All Features': ALL_FOI}
+# %% LDA - Linear Discriminant Analysis - run fillna block first
+
 LDA_results = {}
 sortby = 'Abs(C1)'
 for key, foi in d.items():
-    lda_df = struc_subset[foi]
+    lda_df = struc_subset_filled[foi]
     lda = LDA(n_components = 3)
     T = lda.fit_transform(lda_df, y=nom_cols['drug_label'])
     T_lab = PlotT(T, mapping, color_selection, graphtype='LDA',
                   addtotitle = ': {}'.format(key))
-    Corr_Table = GetCorrTable(struc_subset, T_lab, sort_by = sortby)
+    Corr_Table = GetCorrTable(struc_subset_filled[foi], T_lab, sort_by = sortby)
     exp_var_ratio = lda.explained_variance_ratio_
     LDA_results.update({'{}'.format(key): {'T_lab': T_lab,
                                             'exp_var_ratio': exp_var_ratio,
                                             'Corr_Table': Corr_Table}})
+    
+# %% Get foi from top LDA features; get plot_order
+ 
+sort_by = 'Abs(C1)'
+top = 15
+#table = LDA_results['All Features']['Corr_Table']
+table = LDA_results['Selected Structure Features']['Corr_Table']
+foi = table.sort_values(by = [sort_by], ascending = False).head(top)['Feature']
+
 # %% STATISTICS
 
-"""
-Implement starting with the mean first? and then looking at which group is 
-significant? How different the means are, std, etc. 
+## data table with foi
+stats_df = struc_subset
+stats_df['drug_label'] = nom_cols['drug_label']
+
+foi_stats = {}
+for feature in foi:
+    table = stats_df.groupby(['drug_label'])[feature].describe()                #.unstack().reset_index()
+    foi_stats[feature] = table
+    
+## Compile list of feature parameter into 1 table
+parameters = ['mean', 'std']
+parameters_table = {}
+indices = foi_stats[list(foi_stats.keys())[0]].index.values.tolist()            ## list of drug indices
+
+export = False
+export_dir = r'C:\Users\Winnie\Desktop\QCB\Feature lists'
+
+for par in parameters:
+    parameter_table = {}    
+    parameter_table = pd.DataFrame(index = indices)
+    
+    for feature, stats in foi_stats.items():
+        parameter_table[feature] = stats[par]
+    
+    parameter_table = parameter_table.transpose()
+    parameter_table = parameter_table[plot_order]                               ## re-order columns
+
+    parameters_table.update({'{}'.format(par): parameter_table})
+    
+    if export:
+        exp_df = pd.DataFrame(parameters_table[par])
+        exp_df.to_csv(os.path.join(export_dir, 'par_table_{}.csv'.format(par)), 
+                      index = indices)
+        
+# %% PLOTTING DATA
+
+scatter_df = struc_subset
+scatter_df['drug_label'] = nom_cols['drug_label']
+
 
 """
+plot_order = ['Vehicle',
+              'Brefeldin',
+              'Paclitaxol',
+              'Staurosporine']
+"""
+
+## Get features to plot 
+#foi = ['str_number_of_components']                                     
+
+PlotScatterCI(scatter_df, foi, plot_order)
+ 
+# %%
+
 ## Preliminary stats
 compare = struc_subset_copy
 compare['drug_label'] = nom_cols['drug_label']                                  ## Need drug_label column to pass into CompareVar
@@ -420,41 +577,32 @@ for index in mapping:
 ## Student T-Test compare group to Vehicle group
 ## ignore for now, violin plot includes 95% Confidence interval
 
-# %% PLOTTING DATA
+# %% 2D Scatter plots  
 
-## plot_order - select which drug groups to plot
-plot_order = ['Vehicle']
-for i in range(0, len(mapping)):
-    if mapping[i] not in plot_order:
-        plot_order.append(mapping[i])
+plot_foi = foi
+scatter_df.drop(scatter_df.loc[scatter_df['drug_label'] == 
+                               's-Nitro-Blebbistatin'].index, inplace=True)
 
-plot_order = ['Vehicle',
-              'Brefeldin',
-              'Paclitaxol',
-              'Staurosporine']                                          
+PlotScatter2D(scatter_df, plot_foi)
 
-## Violin Plot: density plot with quartiles & 95% CI                           
-#PlotViolin(struc_subset, STRUC_FOI, plot_order)
-PlotScatterCI(struc_subset, STRUC_FOI, plot_order)
-
- 
-
-# %% Scatter plots                                                              ## features to plot
+# %% 3D Scatter plots                                                           ## features to plot
 
 ## 3D scatter plots over DNA volume and membrane volume
 plot_foi = STRUC_FOI  
-PlotScatter(struc_subset, plot_foi)
-#PlotScatter(struc_subset, ['structure_meridional_eccentricity'], y_lab='dna_meridional_eccentricity')
+PlotScatter3D(scatter_df, plot_foi)
+#PlotScatter3D(struc_subset, ['structure_meridional_eccentricity'], y_lab='dna_meridional_eccentricity')
 
 # %% TEST AREA
+import os
 
-df.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\df.csv')
+export_dir = r'C:\Users\winniel\Desktop\Drug datasets export'
+df.to_csv(os.path.join(export_dir, 'df.csv'), index = False)
 
-ds_gol_fea.ds.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\ds_gol_fea.csv')
-ds_tub_fea.ds.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\ds_tub_fea.csv')
-ds_sec_fea.ds.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\ds_sec_fea.csv')
-ds_dna_fea.ds.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\ds_dna_fea.csv')
-ds_mem_fea.ds.to_csv(r'C:\Users\winniel\Desktop\Drug datasets export\ds_mem_fea.csv')
+ds_gol_fea.ds.to_csv(os.path.join(export_dir, 'ds_gol_fea.csv'), index = False)
+ds_tub_fea.ds.to_csv(os.path.join(export_dir, 'ds_tub_fea.csv'), index = False)
+ds_sec_fea.ds.to_csv(os.path.join(export_dir, 'ds_sec_fea.csv'), index = False)
+ds_dna_fea.ds.to_csv(os.path.join(export_dir, 'ds_dna_fea.csv'), index = False)
+ds_mem_fea.ds.to_csv(os.path.join(export_dir, 'ds_mem_fea.csv'), index = False)
 
 # %%
 # Parallel Coordinates Start Here:
