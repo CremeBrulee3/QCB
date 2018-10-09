@@ -301,7 +301,7 @@ def PlotScatter3D(dff, plot_foi, x_lab='dna_volume', y_lab='mem_volume'):
 
 # %% GLOBAL VARIABLES
     
-STRUCTURE = 'tubulin'
+STRUCTURE = 'golgi'
 NOM_COLS = ['drug_label', 'cell_id', 'cell_ver', 'czi_filename', 
             'idx_in_stack', 'roi', 'str_ver', 'structure_name']
 
@@ -353,11 +353,12 @@ nom_cols = struc_subset[NOM_COLS]
 ## fill struc_subset with DNA, MEM, and STR features
 struc_subset = struc_subset[ALL_FOI]
 
+"""
 ## list of columns that start with 'str' and ends with 'std'
 str_std_list = list(one_comp.filter(regex='^str.*std$'))
 str_list = list(one_comp.filter(regex='^str'))
 
-"""
+
 ## subset where number of components = 0
 no_comp = struc_subset[(struc_subset['str_number_of_components']==0)]
 
@@ -444,8 +445,8 @@ for i in range(0, len(mapping)):
 
 ## Turn NaN values into 0's (with number of structure components = 0 and 1)
 struc_subset = struc_subset[ALL_FOI]
-#struc_subset_filled = struc_subset.fillna(0, inplace=False)
-struc_subset_filled = struc_subset
+struc_subset_filled = struc_subset.fillna(0, inplace=False)
+#struc_subset_filled = struc_subset
 
 # %% PCA
 ## Graphing PCA by above feature categories and getting tables
@@ -503,7 +504,7 @@ for key, foi in d.items():
 # %% Get foi from top LDA features; get plot_order
  
 sort_by = 'Abs(C1)'
-top = 15
+top = 10
 #table = LDA_results['All Features']['Corr_Table']
 table = LDA_results['Selected Structure Features']['Corr_Table']
 foi = table.sort_values(by = [sort_by], ascending = False).head(top)['Feature']
