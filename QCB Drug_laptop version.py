@@ -51,7 +51,7 @@ ds_dna_fea = pd.read_csv(os.path.join(import_dir, 'ds_dna_fea.csv'),
 ds_mem_fea = pd.read_csv(os.path.join(import_dir, 'ds_mem_fea.csv'), 
                          header = 0)
 
-# %% Making dataframe with all features and meta data 
+# %% Making dataframe with all features and meta data from aics network
 
 ## Concatenate structure features table
 struc_fea = pd.concat([ds_gol_fea.ds,
@@ -286,19 +286,19 @@ def PlotScatter3D(dff, plot_foi, x_lab='dna_volume', y_lab='mem_volume'):
 
 # %% GLOBAL VARIABLES
     
-STRUCTURE = 'tubulin'
+STRUCTURE = 'golgi'
 NOM_COLS = ['drug_label', 'cell_id', 'cell_ver', 'czi_filename', 
             'idx_in_stack', 'roi', 'str_ver', 'structure_name']
 
 ## Features of interest
-STRUC_FEA_DIC = {'golgi': list(ds_gol_fea),
-                 'tubulin': list(ds_tub_fea),
-                 'sec61b': list(ds_sec_fea)}
+STRUC_FEA_DIC = {'golgi': list(ds_gol_fea.ds),
+                 'tubulin': list(ds_tub_fea.ds),
+                 'sec61b': list(ds_sec_fea.ds)}
 
-DNA_FOI = list(ds_dna_fea)
+DNA_FOI = list(ds_dna_fea.ds)
 DNA_FOI.remove('cell_id')
 
-MEM_FOI = list(ds_mem_fea)
+MEM_FOI = list(ds_mem_fea.ds)
 MEM_FOI.remove('cell_id')
 
 STRUC_FOI = STRUC_FEA_DIC.get(STRUCTURE)
@@ -338,11 +338,12 @@ nom_cols = struc_subset[NOM_COLS]
 ## fill struc_subset with DNA, MEM, and STR features
 struc_subset = struc_subset[ALL_FOI]
 
+"""
 ## list of columns that start with 'str' and ends with 'std'
 str_std_list = list(one_comp.filter(regex='^str.*std$'))
 str_list = list(one_comp.filter(regex='^str'))
 
-"""
+
 ## subset where number of components = 0
 no_comp = struc_subset[(struc_subset['str_number_of_components']==0)]
 
@@ -429,8 +430,8 @@ for i in range(0, len(mapping)):
 
 ## Turn NaN values into 0's (with number of structure components = 0 and 1)
 struc_subset = struc_subset[ALL_FOI]
-#struc_subset_filled = struc_subset.fillna(0, inplace=False)
-struc_subset_filled = struc_subset
+struc_subset_filled = struc_subset.fillna(0, inplace=False)
+#struc_subset_filled = struc_subset
 
 # %% PCA
 ## Graphing PCA by above feature categories and getting tables
@@ -488,7 +489,7 @@ for key, foi in d.items():
 # %% Get foi from top LDA features; get plot_order
  
 sort_by = 'Abs(C1)'
-top = 15
+top = 10
 #table = LDA_results['All Features']['Corr_Table']
 table = LDA_results['Selected Structure Features']['Corr_Table']
 foi = table.sort_values(by = [sort_by], ascending = False).head(top)['Feature']
@@ -578,7 +579,6 @@ PlotScatter3D(scatter_df, plot_foi)
 #PlotScatter3D(struc_subset, ['structure_meridional_eccentricity'], y_lab='dna_meridional_eccentricity')
 
 # %% TEST AREA
-
 import os
 
 export_dir = r'C:\Users\winniel\Desktop\Drug datasets export'
