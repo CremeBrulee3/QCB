@@ -14,7 +14,8 @@ Functions include:
 # %% Import Section
 import os
 import pandas as pd
-from itkwidgets import view
+
+#from itkwidgets import view  ## for jupyter notebook
 import numpy as np
 from scipy import stats
 
@@ -33,11 +34,13 @@ from sklearn import preprocessing
 from sklearn import manifold
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 
+## for AICS databasedataset
+#import datasetdatabase as dsdb
 ## ggplot
 plt.style.use('ggplot')
 
 # %% Import files from csv's 
-import_dir = r'\\allen\aics\microscopy\Winnie\Scripts and Codes\Python Scripts\QCB\Drug datasets export'
+import_dir = r'C:\Users\winniel\Desktop\Drug datasets export'
 
 df = pd.read_csv(os.path.join(import_dir, 'df.csv'), header = 0)
 ds_gol_fea = pd.read_csv(os.path.join(import_dir, 'ds_gol_fea.csv'), 
@@ -50,6 +53,18 @@ ds_dna_fea = pd.read_csv(os.path.join(import_dir, 'ds_dna_fea.csv'),
                          header = 0)
 ds_mem_fea = pd.read_csv(os.path.join(import_dir, 'ds_mem_fea.csv'), 
                          header = 0)
+
+# %% LOAD DATASET: Extended golgi, tubulin, sec61 dataset from Network
+## connect to database(prod)
+prod = dsdb.DatasetDatabase(config="//allen/aics/assay-dev/Analysis/QCB_database/prod_config.json")
+
+## load features from golgi
+ds_meta = prod.get_dataset(name='QCB_drug_cell_meta')
+ds_dna_fea = prod.get_dataset(name='QCB_DRUG_DNA_feature')
+ds_mem_fea = prod.get_dataset(name='QCB_DRUG_MEM_feature')
+ds_gol_fea = prod.get_dataset(name='QCB_DRUG_ST6GAL_feature')
+ds_tub_fea = prod.get_dataset(name='QCB_DRUG_TUBA1B_feature')
+ds_sec_fea = prod.get_dataset(name='QCB_DRUG_SEC61B_feature')
 
 # %% Making dataframe with all features and meta data from aics network
 
@@ -273,7 +288,12 @@ def PlotScatterCI(df, features, plot_order, groupby='drug_label', ttest=True,
 
 ## 2D scatter plot: dff = dataset, plot_foi = list of features to plot
 ## x and y_lab are feature names on x and y axis
-def PlotScatter2D(dff, plot_foi, plot_doi=plot_order, x_lab='dna_volume'):
+def PlotScatter2D(dff, plot_foi, *doi, x_lab='dna_volume', linreg=False):
+    
+    if isinstance(doi[0], list):
+        doi = doi[0]
+    
+        
     for foi in plot_foi:
         
         fig = plt.figure()
@@ -284,19 +304,28 @@ def PlotScatter2D(dff, plot_foi, plot_doi=plot_order, x_lab='dna_volume'):
         ax.set_xlabel('{}'.format(x_lab))
         ax.set_ylabel('{}'.format(y_lab))
         
-        for drug in plot_doi:
+        for drug in doi:
             index = mapping.index(drug)
             try:
                 drug_group = dff.groupby('drug_label').get_group(drug)
                 color = color_selection[index]
                 ax.scatter(drug_group[x_lab], drug_group[y_lab],
                            c=color, label=drug)
+                if linreg:
+                    x = drug_group[x_lab]
+                    y = drug_group[y_lab]
+    
+                    slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
+                    r_sq = r_value**2
+                    ax.plot(x, intercept + slope*x, c='k', 
+                            label='R^2: {}'.format(r_sq))
+
             except:
                 print('Skipped plotting {}'.format(drug))
                 pass
         ## Plot
         plt.legend()
-        plt.show()    
+        plt.show()
 
 ## 3D scatter plot: dff = dataset, plot_foi = list of features to plot
 ## x and y_lab are feature names on x and y axis
@@ -373,7 +402,7 @@ struc_count = counts_table[(counts_table.structure_name == STRUCTURE)]
 
 %matplotlib auto
 
-## Make subsets, dictionary, color mapping
+## Make subsets, color mapping
 
 struc_subset = df.groupby(by='structure_name').get_group(STRUCTURE)
 ## Save out nominal columns
@@ -416,18 +445,12 @@ struc_subset['scene_number'] = scene_number
 struc_subset['session_number'] = session_number
 struc_subset['scene_number'] = struc_subset['scene_number'].astype('int64')
 struc_subset['session_number'] = struc_subset['session_number'].astype('int64')
+
 ## assign color per drug
 color_selection = [color_map[index] for index in range(len(mapping))]
 
-## Dictionary of feature grouping
-d = {'DNA Features': DNA_FOI, 
-     'MEM Features': MEM_FOI,
-     'DNA and MEM Features': DNA_FOI + MEM_FOI,
-     'Structure Features': STRUC_FOI,
-     'All Features': ALL_FOI}
-
 # %% CUSTOMIZE FOI
-## Customized foi
+## Customized foi, add all foi's to dictionary
 export_dir = r'C:\Users\Winnie\Desktop\QCB\Feature lists'
 exp_df = pd.DataFrame(STRUC_FOI)
 exp_df.to_csv(os.path.join(export_dir, '{}_STRUC_FOI.csv'.format(STRUCTURE)),
@@ -475,8 +498,13 @@ foi = ['str_1st_axis_length_mean',
         'str_surface_area_mean',
         'str_volume_mean']
 """
-## Run this if selected feature
-d = {'Selected Structure Features': foi}
+## Dictionary of feature grouping
+d = {'DNA Features': DNA_FOI, 
+     'MEM Features': MEM_FOI,
+     'DNA and MEM Features': DNA_FOI + MEM_FOI,
+     'Structure Features': STRUC_FOI,
+     'All Features': ALL_FOI,
+     'Selected Structure Features': foi}
 
 # %% Get Plot/Table order of drugs - Vehicle first
 
@@ -501,7 +529,7 @@ only_drug = 'Brefeldin'
 
 struc_subset_filled = struc_subset_filled[(struc_subset_filled.drug_label == only_drug) |
                         (struc_subset_filled.drug_label == 'Vehicle')]
-
+struc_subset_filled = struc_subset_filled[(struc_subset_filled.drug_label == 'Vehicle')]
 ## dropping groups
 ssf = struc_subset_filled
 struc_subset_filled = ssf.drop(ssf[(ssf.drug_label == 'Brefeldin') |
@@ -608,7 +636,7 @@ for par in parameters:
         exp_df.to_csv(os.path.join(export_dir, 'par_table_{}.csv'.format(par)), 
                       index = indices)
         
-# %% PLOTTING SCATTER PLOTS WITH P-VALUES 
+# %% PLOTTING SCATTER CI PLOTS WITH P-VALUES 
         
 scatter_df = struc_subset
 scatter_df['drug_label'] = nom_cols['drug_label']
@@ -652,13 +680,29 @@ for drug in drugs:
 # %% 2D Scatter plots  
 
 plot_foi = ['str_volume_mean']
-plot_doi = ['Brefeldin']
+plot_doi = ['Vehicle']
 """
 scatter_df.drop(scatter_df.loc[scatter_df['drug_label'] == 
                                's-Nitro-Blebbistatin'].index, inplace=True)
 """
-PlotScatter2D(scatter_df, foi, plot_doi=plot_order)
-PlotScatter2D(scatter_df, plot_foi, plot_doi=plot_doi, x_lab='mem_volume')
+PlotScatter2D(scatter_df, foi, plot_order)
+
+# %% 2D Scatter plot with linear regression (Ordinary Least Squares) 
+
+scatter_df = struc_subset
+scatter_df['drug_label'] = nom_cols['drug_label']
+drug = 'Brefeldin'
+
+plot_foi = 'str_volume_mean'
+x_lab = ['dna_volume', 'mem_volume']
+
+for axis in x_lab:
+    PlotScatter2D(scatter_df, [plot_foi], drug, x_lab=axis, linreg=True)
+    
+# %% 2D scatter plot with linear regression (Orthogonal Distance Regression)
+    
+scatter_df = struc_subset
+scatter_df['drug_label'] = nom_cols['drug_label']
 
 # %% 3D Scatter plots                                                           ## features to plot
 
