@@ -18,6 +18,7 @@ import pandas as pd
 #from itkwidgets import view  ## for jupyter notebook
 import numpy as np
 from scipy import stats
+from scipy.odr import *
 
 import matplotlib.pyplot as plt
 
@@ -288,7 +289,8 @@ def PlotScatterCI(df, features, plot_order, groupby='drug_label', ttest=True,
 
 ## 2D scatter plot: dff = dataset, plot_foi = list of features to plot
 ## x and y_lab are feature names on x and y axis
-def PlotScatter2D(dff, plot_foi, *doi, x_lab='dna_volume', linreg=False):
+def PlotScatter2D(dff, plot_foi, *doi, x_lab='dna_volume', linreg=False, 
+                  odrreg=False):
     
     if isinstance(doi[0], list):
         doi = doi[0]
@@ -311,14 +313,36 @@ def PlotScatter2D(dff, plot_foi, *doi, x_lab='dna_volume', linreg=False):
                 color = color_selection[index]
                 ax.scatter(drug_group[x_lab], drug_group[y_lab],
                            c=color, label=drug)
+                x = drug_group[x_lab]
+                y = drug_group[y_lab]
+                    
                 if linreg:
-                    x = drug_group[x_lab]
-                    y = drug_group[y_lab]
     
                     slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
                     r_sq = r_value**2
-                    ax.plot(x, intercept + slope*x, c='k', 
-                            label='R^2: {}'.format(r_sq))
+                    ax.plot(x, intercept + slope*x, c='r', 
+                            label='OLR R^2: {:.3f}'.format(r_sq))
+                
+                if odrreg:
+                    ## Model for fitting
+                    linear_model = Model(linear_f)
+                    
+                    ## Real Data Object             
+                    data = RealData(x, y)
+                    #data = Data(x, y)
+                    ## Set up ODR with model and data
+                    odr = ODR(data, linear_model, beta0=[0, 1])
+                    out = odr.run()
+                    out.pprint()
+                    rv = out.res_var
+                    ## Generate fitted data
+                    x = x.sort_values()
+                    x = list(x)
+                    x_fit = np.linspace(x[0], x[-1], 1000)
+                    y_fit = linear_f(out.beta, x_fit)
+
+                    ax.plot(x_fit, y_fit, c='k', 
+                            label='ODR RV: {:.3f}'.format(rv))
 
             except:
                 print('Skipped plotting {}'.format(drug))
@@ -355,7 +379,11 @@ def PlotScatter3D(dff, plot_foi, x_lab='dna_volume', y_lab='mem_volume'):
         ## Plot
         plt.legend()
         plt.show()    
-        
+
+## Function to fit data with
+def linear_f(p, x):
+    m, c = p
+    return m*x + c
 
 # %% GLOBAL VARIABLES
     
@@ -687,23 +715,20 @@ scatter_df.drop(scatter_df.loc[scatter_df['drug_label'] ==
 """
 PlotScatter2D(scatter_df, foi, plot_order)
 
-# %% 2D Scatter plot with linear regression (Ordinary Least Squares) 
+# %% 2D Scatter plot with linear regression 
+    ## with Ordinary Least Squares and Orthogonal Distance Regression options
 
 scatter_df = struc_subset
 scatter_df['drug_label'] = nom_cols['drug_label']
-drug = 'Brefeldin'
+drug = 'Vehicle'
 
 plot_foi = 'str_volume_mean'
 x_lab = ['dna_volume', 'mem_volume']
 
 for axis in x_lab:
-    PlotScatter2D(scatter_df, [plot_foi], drug, x_lab=axis, linreg=True)
+    PlotScatter2D(scatter_df, [plot_foi], drug, x_lab=axis, linreg = True, 
+                  odrreg=True)
     
-# %% 2D scatter plot with linear regression (Orthogonal Distance Regression)
-    
-scatter_df = struc_subset
-scatter_df['drug_label'] = nom_cols['drug_label']
-
 # %% 3D Scatter plots                                                           ## features to plot
 
 ## 3D scatter plots over DNA volume and membrane volume

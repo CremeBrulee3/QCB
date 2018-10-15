@@ -136,28 +136,36 @@ def GetCorrCoeff(struc_subset, PCA_T):                                          
 
 
 ## Plot 3D graphs of dimensionality reduction (PCA, LDA, Isomap)
-def PlotT(T, mapping, color_selection, graphtype=None, addtotitle=None):
-    
+def PlotT(T, color_selection, graphtype=None, addtotitle=None, 
+          drug_lab=nom_cols['drug_label']):
+    dimensionality = T.shape[1]
+    column_data = {f'C{i+1}': T[:, i] for i in range(dimensionality)}
     T_lab = pd.DataFrame({
-            'drug_label': nom_cols['drug_label'],
-            'C1': T[:,0],
-            'C2': T[:,1],
-            'C3': T[:,2]})
+            'drug_label': drug_lab,
+            **column_data})                                                     ## ** for expands dictionary
             
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection = '3d')
+    projection = '3d' if dimensionality == 3 else None
+    ax = fig.add_subplot(111, projection=projection)
     
     ax.set_title('{} of {} {}'.format(graphtype, STRUCTURE, addtotitle))
     ax.set_xlabel('Component 1')
-    ax.set_ylabel('Component 2')
-    ax.set_zlabel('Component 3')
+    if dimensionality > 1:
+        ax.set_ylabel('Component 2')
+    if dimensionality > 2:
+        ax.set_zlabel('Component 3')
     
-    for index in mapping:
-        drug = mapping[index]
+    for drug in drug_lab.unique():
         xyz = T_lab.groupby('drug_label').get_group(drug)
+        index = mapping.index(drug)
         color = color_selection[index]
-        ax.scatter(xyz['C1'], xyz['C2'], xyz['C3'], 
-                   c=color, label=drug, alpha=0.75)
+        if dimensionality == 1:
+            ax.plot(*[xyz[c].values for c in xyz.columns if c.startswith('C')],
+                      c=color, label=drug, alpha=0.75)
+            continue
+        else: 
+            ax.scatter(*[xyz[c].values for c in xyz.columns if c.startswith('C')], 
+                       c=color, label=drug, alpha=0.75)
     
     ## Plot
     plt.legend()
@@ -167,10 +175,22 @@ def PlotT(T, mapping, color_selection, graphtype=None, addtotitle=None):
 
 ## Find the correlation coefficient for all three PC's. Returns corr table
 def GetCorrTable(struc_subset, T_lab, sort_by='Abs(C2)'):
-    C1_corr = GetCorrCoeff(struc_subset, T_lab['C1'])                         ## same correlation using original scaled or unscaled
-    C2_corr = GetCorrCoeff(struc_subset, T_lab['C2'])
-    C3_corr = GetCorrCoeff(struc_subset, T_lab['C3'])
+    dimensionality = T_lab.shape[1] - 1
     
+    C_table = {}
+    C_table.update({'C1_corr': GetCorrCoeff(struc_subset, T_lab['C1'])})        ## same correlation using original scaled or unscaled
+    if dimensionality > 1:
+        C_table.update({'C2_corr': GetCorrCoeff(struc_subset, T_lab['C2'])})
+    if dimensionality > 2:
+        C_table.update({'C3_corr': GetCorrCoeff(struc_subset, T_lab['C3'])})
+    
+    corr_data_abs = {f'Abs(C{i+1})': [abs(x) for x in C_table[f'C{i+1}_corr']] for i in range(dimensionality)}
+    corr_data = {f'C{i+1}': C_table[f'C{i+1}_corr'] for i in range(dimensionality)}
+    
+    corr_table = pd.DataFrame({'Feature': list(struc_subset),
+                               **corr_data_abs,
+                               **corr_data})    
+    """
     corr_table = pd.DataFrame({'Feature': list(struc_subset),
                                'Abs(C1)': [abs(x) for x in C1_corr],
                                'Abs(C2)': [abs(y) for y in C2_corr],
@@ -178,6 +198,7 @@ def GetCorrTable(struc_subset, T_lab, sort_by='Abs(C2)'):
                                'C1': C1_corr,
                                'C2': C2_corr,
                                'C3': C3_corr})
+    """
     
     corr_table_sorted = corr_table.sort_values(by = [sort_by], 
                                                ascending = False)
@@ -226,7 +247,10 @@ def PlotViolin(df, features, plot_order):
 ## Plot Scatter plot for each category with 95% confidence interval
 def PlotScatterCI(df, features, plot_order):
     # Set up the matplotlib figure
+    
     sns.set(style="darkgrid")
+    
+    p_val_results = {}
     for feature in features:
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -243,9 +267,23 @@ def PlotScatterCI(df, features, plot_order):
         sns.stripplot(x='drug_label', y=feature, data=df, jitter=True,
                           palette="Pastel1", edgecolor='k', size=5, 
                           order=plot_order)
-                                                           
-
+       
+        ## return T-Test stats
+        p_val_table = {}
+        for drug in plot_order:
+            if drug != 'Vehicle':
+                vehicle = df[(df.drug_label == 'Vehicle')][feature]
+                drug_df = df[(df.drug_label == drug)][feature]                                                   
+                t_stat, p_val = stats.ttest_ind(vehicle, drug_df)
+                p_val_table.update({'{}'.format(drug): p_val})
+                
+        p_val_table2 = pd.DataFrame(list(p_val_table.items()),
+                                   columns = ['Drug group against Vehicle',
+                                              'p-value'])
+        p_val_results.update({'{}'.format(feature): p_val_table2})
         
+    return p_val_results
+
 ## 2D scatter plot: dff = dataset, plot_foi = list of features to plot
 ## x and y_lab are feature names on x and y axis
 def PlotScatter2D(dff, plot_foi, x_lab='dna_volume'):
@@ -259,8 +297,8 @@ def PlotScatter2D(dff, plot_foi, x_lab='dna_volume'):
         ax.set_xlabel('{}'.format(x_lab))
         ax.set_ylabel('{}'.format(y_lab))
         
-        for index in mapping:
-            drug = mapping[index]
+        for drug in mapping:
+            index = mapping.index(drug)
             try:
                 drug_group = dff.groupby('drug_label').get_group(drug)
                 color = color_selection[index]
@@ -287,12 +325,16 @@ def PlotScatter3D(dff, plot_foi, x_lab='dna_volume', y_lab='mem_volume'):
         ax.set_ylabel('{}'.format(y_lab))
         ax.set_zlabel('{}'.format(z_lab))
         
-        for index in mapping:
-            drug = mapping[index]
-            drug_group = dff.groupby('drug_label').get_group(drug)
-            color = color_selection[index]
-            ax.scatter(drug_group[x_lab], drug_group[y_lab], drug_group[z_lab], 
-                       c=color, label=drug)
+        for drug in mapping:
+            index = mapping.index(drug)
+            try:
+                drug_group = dff.groupby('drug_label').get_group(drug)
+                color = color_selection[index]
+                ax.scatter(drug_group[x_lab], drug_group[y_lab], drug_group[z_lab], 
+                           c=color, label=drug)
+            except:
+                print('Skipped plotting {}'.format(drug))
+                pass
         
         ## Plot
         plt.legend()
@@ -370,7 +412,18 @@ one_comp = struc_subset[(struc_subset['str_number_of_components']==1)]
 struc_subset['drug_label'] = nom_cols['drug_label']
 struc_subset['drug_label'] = struc_subset['drug_label'].astype("category")
 mapping = dict(enumerate(struc_subset['drug_label'].cat.categories))
+mapping = list(mapping.values())
 color_map = ['b', 'g', 'k', 'y', 'r', 'm', 'c']
+
+## Add column for scene number
+scene_number = []
+for filename in nom_cols['czi_filename']:
+    junk, after = filename.split('Scene-')
+    scene = after.split('-')[0]
+    scene_number.append(scene)
+    
+struc_subset['scene_number'] = scene_number
+
 
 ## assign color per drug
 color_selection = [color_map[index] for index in range(0,len(mapping))]
@@ -401,7 +454,7 @@ foi = ['str_1st_axis_length_mean',
         'str_skeleton_edge_vol_mean',
         'str_skeleton_vol_mean',
         'str_sphericity_mean']
-
+"""
 ## golgi
 foi = ['str_1st_axis_length_mean',
         'str_2nd_axis_length_mean',
@@ -429,7 +482,7 @@ foi = ['str_1st_axis_length_mean',
         'str_skeleton_vol_mean',
         'str_surface_area_mean',
         'str_volume_mean']
-
+"""
 ## Run this if selected feature
 d = {'Selected Structure Features': foi}
 
@@ -448,6 +501,14 @@ struc_subset = struc_subset[ALL_FOI]
 struc_subset_filled = struc_subset.fillna(0, inplace=False)
 #struc_subset_filled = struc_subset
 
+## getting df with only bref and vehicle
+only_drug = 's-Nitro-Blebbistatin'
+
+struc_subset_filled['drug_label'] = nom_cols['drug_label']
+
+struc_subset_filled = struc_subset_filled[(struc_subset_filled.drug_label == only_drug) |
+                        (struc_subset_filled.drug_label == 'Vehicle') |
+                        (struc_subset_filled.drug_label == 'Brefeldin')]
 # %% PCA
 ## Graphing PCA by above feature categories and getting tables
 ## run fillna block first
@@ -461,7 +522,7 @@ for key, foi in d.items():
     pca.fit(struc_scaled)
     T = pca.transform(struc_scaled)
     ## Graph PCA and get correlation table of original features to each PC
-    T_lab = PlotT(T, mapping, color_selection, graphtype='PCA', 
+    T_lab = PlotT(T, color_selection, graphtype='PCA', 
                   addtotitle = ': {}'.format(key))
     Corr_Table = GetCorrTable(struc_scaled[foi], T_lab, sort_by = sort_by)
     
@@ -480,7 +541,7 @@ for key, foi in d.items():
     iso_df = struc_subset_filled[foi]
     iso = manifold.Isomap(n_neighbors=4, n_components=3)
     T = iso.fit_transform(iso_df)
-    T_lab = PlotT(T, mapping, color_selection, graphtype='Isomap', 
+    T_lab = PlotT(T, color_selection, graphtype='Isomap', 
                   addtotitle = ': {}'.format(key))
     Iso_Corr_Table = GetCorrTable(struc_subset[FOI], T_lab, sort_by = sort_by)
     Iso_results.update({'{}'.format(key): {'Corr_Table': Iso_Corr_Table}})
@@ -489,18 +550,21 @@ for key, foi in d.items():
 
 LDA_results = {}
 sortby = 'Abs(C1)'
+
 for key, foi in d.items():
     lda_df = struc_subset_filled[foi]
     lda = LDA(n_components = 3)
-    T = lda.fit_transform(lda_df, y=nom_cols['drug_label'])
-    T_lab = PlotT(T, mapping, color_selection, graphtype='LDA',
-                  addtotitle = ': {}'.format(key))
+    #T = lda.fit_transform(lda_df, y=nom_cols['drug_label'])
+    T = lda.fit_transform(lda_df, y=struc_subset_filled['drug_label'])
+    T_lab = PlotT(T, color_selection, graphtype='LDA',
+                  addtotitle = ': {}'.format(key), 
+                  drug_lab = struc_subset_filled['drug_label'])
     Corr_Table = GetCorrTable(struc_subset_filled[foi], T_lab, sort_by = sortby)
     exp_var_ratio = lda.explained_variance_ratio_
     LDA_results.update({'{}'.format(key): {'T_lab': T_lab,
                                             'exp_var_ratio': exp_var_ratio,
                                             'Corr_Table': Corr_Table}})
-    
+
 # %% Get foi from top LDA features; get plot_order
  
 sort_by = 'Abs(C1)'
@@ -561,7 +625,11 @@ plot_order = ['Vehicle',
 ## Get features to plot 
 #foi = ['str_number_of_components']                                     
 
-PlotScatterCI(scatter_df, foi, plot_order)
+## Plotting different cell sizes of different drugs
+foi = ['dna_volume', 'mem_volume']
+
+## Plot pointplots/scatter plots and returns p-values
+p_val_results = PlotScatterCI(scatter_df, foi, plot_order)
  
 # %%
 
@@ -578,12 +646,15 @@ for index in mapping:
 ## Student T-Test compare group to Vehicle group
 ## ignore for now, violin plot includes 95% Confidence interval
 
+# %% 
+
 # %% 2D Scatter plots  
 
-plot_foi = foi
+plot_foi = ['str_volume_mean']
+"""
 scatter_df.drop(scatter_df.loc[scatter_df['drug_label'] == 
                                's-Nitro-Blebbistatin'].index, inplace=True)
-
+"""
 PlotScatter2D(scatter_df, plot_foi)
 
 # %% 3D Scatter plots                                                           ## features to plot
