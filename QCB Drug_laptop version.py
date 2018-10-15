@@ -545,8 +545,8 @@ for i in range(len(mapping)):
 # %% Formatting df to run before PCA/ISOMAP/LDA
 
 ## Turn NaN values into 0's (with number of structure components = 0 and 1)
-struc_subset = struc_subset[ALL_FOI]
-struc_subset_filled = struc_subset.fillna(0, inplace=False)
+struc_subset_filled = struc_subset[ALL_FOI]
+struc_subset_filled = struc_subset_filled.fillna(0, inplace=False)
 #struc_subset_filled = struc_subset
 
 ## Add drug_label column - LDA will ignore this column
