@@ -5,10 +5,11 @@ Winnie Leung
 QCB Analysis Codes
 Functions include:
     Get count tables for each condition
-    PCA plots with Correlation coefficients table
-    Parallel Coordinates
-    Comparing variance of Control group vs Control + Drug
-    Violin Distribution plots with quartiles and 95% CI
+    PCA, IsoMap, LDA plots with Correlation coefficients table
+    Table of stats with mean and std of each group
+    Scatter plots with t-test and p-values
+    2D Scatter plots with 95% CI
+    3D Scatter plots
     
 """
 # %% Import Section
@@ -41,7 +42,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 plt.style.use('ggplot')
 
 # %% Import files from csv's 
-import_dir = r'C:\Users\winniel\Desktop\Drug datasets export'
+import_dir = r'\\allen\aics\microscopy\Winnie\Scripts and Codes\Python Scripts\QCB\Drug datasets export'
 
 df = pd.read_csv(os.path.join(import_dir, 'df.csv'), header = 0)
 ds_gol_fea = pd.read_csv(os.path.join(import_dir, 'ds_gol_fea.csv'), 
@@ -62,7 +63,7 @@ prod = dsdb.DatasetDatabase(config="//allen/aics/assay-dev/Analysis/QCB_database
 ## load features from golgi
 ds_meta = prod.get_dataset(name='QCB_drug_cell_meta')
 ds_dna_fea = prod.get_dataset(name='QCB_DRUG_DNA_feature')
-ds_mem_fea = prod.get_dataset(name='QCB_DRUG_MEM_feature')
+ds_mem_fea = prod.get_dataset(name='QCB_DRUG_CELL_feature')
 ds_gol_fea = prod.get_dataset(name='QCB_DRUG_ST6GAL_feature')
 ds_tub_fea = prod.get_dataset(name='QCB_DRUG_TUBA1B_feature')
 ds_sec_fea = prod.get_dataset(name='QCB_DRUG_SEC61B_feature')
@@ -148,7 +149,10 @@ def PlotT(T, color_selection, graphtype=None, addtotitle=None, drug_lab=None):
     projection = '3d' if dimensionality == 3 else None
     ax = fig.add_subplot(111, projection=projection)
     
-    ax.set_title('{} of {} {}'.format(graphtype, STRUCTURE, addtotitle))
+    if addtotitle == None:
+        ax.set_title(f'{graphtype} of {STRUCTURE}')
+    else:
+        ax.set_title(f'{graphtype} of {STRUCTURE}, {addtotitle}')
     ax.set_xlabel('Component 1')
     if dimensionality > 1:
         ax.set_ylabel('Component 2')
@@ -190,15 +194,6 @@ def GetCorrTable(struc_subset, T_lab, sort_by='Abs(C1)'):
     corr_table = pd.DataFrame({'Feature': list(struc_subset),
                                **corr_data_abs,
                                **corr_data})    
-    """
-    corr_table = pd.DataFrame({'Feature': list(struc_subset),
-                               'Abs(C1)': [abs(x) for x in C1_corr],
-                               'Abs(C2)': [abs(y) for y in C2_corr],
-                               'Abs(C3)': [abs(z) for z in C3_corr],
-                               'C1': C1_corr,
-                               'C2': C2_corr,
-                               'C3': C3_corr})
-    """
     
     corr_table_sorted = corr_table.sort_values(by = [sort_by], 
                                                ascending = False)
@@ -255,7 +250,11 @@ def PlotScatterCI(df, features, plot_order, groupby='drug_label', ttest=True,
     for feature in features:
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        ax.set_title('{}: {}{}'.format(STRUCTURE, feature, addtotitle))
+        
+        if addtotitle == None:
+            ax.set_title(f'{STRUCTURE}: {feature}')
+        else:
+            ax.set_title(f'{STRUCTURE}: {feature}, {addtotitle}')
         
         ax = sns.pointplot(x=groupby, y=feature, data=df, ci=95, size=3,
                            color='k', join=False, order=plot_order,
@@ -290,7 +289,7 @@ def PlotScatterCI(df, features, plot_order, groupby='drug_label', ttest=True,
 ## 2D scatter plot: dff = dataset, plot_foi = list of features to plot
 ## x and y_lab are feature names on x and y axis
 def PlotScatter2D(dff, plot_foi, *doi, x_lab='dna_volume', linreg=False, 
-                  odrreg=False):
+                  odrreg=False, addtotitle=None):
     
     if isinstance(doi[0], list):
         doi = doi[0]
@@ -302,7 +301,10 @@ def PlotScatter2D(dff, plot_foi, *doi, x_lab='dna_volume', linreg=False,
         ax = fig.add_subplot(111)
         y_lab = foi
     
-        ax.set_title('{}: {}'.format(STRUCTURE, foi))
+        if addtotitle == None:
+            ax.set_title(f'{STRUCTURE}: {foi}')
+        else:
+            ax.set_title(f'{STRUCTURE}: {foi}, {addtotitle}')
         ax.set_xlabel('{}'.format(x_lab))
         ax.set_ylabel('{}'.format(y_lab))
         
@@ -313,36 +315,50 @@ def PlotScatter2D(dff, plot_foi, *doi, x_lab='dna_volume', linreg=False,
                 color = color_selection[index]
                 ax.scatter(drug_group[x_lab], drug_group[y_lab],
                            c=color, label=drug)
+                
                 x = drug_group[x_lab]
                 y = drug_group[y_lab]
-                    
+                
+                x_norm = x/np.mean(x)
+                y_norm = y/np.mean(y)
+                
+                slope, intercept, r_value, p_value, std_err = stats.linregress(x_norm, y_norm)
+                r_sq = r_value**2
+                
                 if linreg:
-    
-                    slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
-                    r_sq = r_value**2
-                    ax.plot(x, intercept + slope*x, c='r', 
-                            label='OLR R^2: {:.3f}'.format(r_sq))
+                    #ax.plot(x, (intercept + slope*x_norm)*np.mean(y), c='r', 
+                            #label='$OLR: R^2$: {:.3f}'.format(r_sq))
+                    pass
                 
                 if odrreg:
                     ## Model for fitting
                     linear_model = Model(linear_f)
                     
                     ## Real Data Object             
-                    data = RealData(x, y)
-                    #data = Data(x, y)
+                    data = Data(x, y)
+                    
                     ## Set up ODR with model and data
                     odr = ODR(data, linear_model, beta0=[0, 1])
+                    odr.set_job(fit_type=0)
                     out = odr.run()
-                    out.pprint()
-                    rv = out.res_var
+                    
+                    ## Text
+                    """
+                    text = f'$R^2$: {r_sq:.3f}' \
+                            f'\nP-value: {p_value:.3f}'
+                        
+                    ax.text(0.01, 0.99, text, transform=ax.transAxes, 
+                            horizontalalignment='left',
+                            verticalalignment='top', fontsize=10)
+                    """
                     ## Generate fitted data
-                    x = x.sort_values()
-                    x = list(x)
-                    x_fit = np.linspace(x[0], x[-1], 1000)
-                    y_fit = linear_f(out.beta, x_fit)
-
-                    ax.plot(x_fit, y_fit, c='k', 
-                            label='ODR RV: {:.3f}'.format(rv))
+                    #x = x.sort_values()
+                    #x = list(x)
+                    #x_fit = np.linspace(x[0], x[-1], 1000)
+                    y_fit = linear_f(out.beta, x)
+                    #y_fit = linear_f(out.beta, x_norm)
+                    #ax.plot(x, y_fit*np.mean(y), c='k', label='ODR')
+                    ax.plot(x, y_fit, c='k', label=f'ODR. $R^2$: {r_sq:.3f}')
 
             except:
                 print('Skipped plotting {}'.format(drug))
@@ -474,6 +490,11 @@ struc_subset['session_number'] = session_number
 struc_subset['scene_number'] = struc_subset['scene_number'].astype('int64')
 struc_subset['session_number'] = struc_subset['session_number'].astype('int64')
 
+## Multiple structure volume_mean by number to get total structure
+a = struc_subset['str_number_of_components']
+b = struc_subset['str_volume_mean']
+struc_subset['str_volume_total'] = a*b
+
 ## assign color per drug
 color_selection = [color_map[index] for index in range(len(mapping))]
 
@@ -551,7 +572,7 @@ struc_subset_filled = struc_subset_filled.fillna(0, inplace=False)
 
 ## Add drug_label column - LDA will ignore this column
 struc_subset_filled['drug_label'] = nom_cols['drug_label']
-
+"""
 ## getting df with only vehicle and one other drug
 only_drug = 'Brefeldin'
 
@@ -563,6 +584,7 @@ ssf = struc_subset_filled
 struc_subset_filled = ssf.drop(ssf[(ssf.drug_label == 'Brefeldin') |
                             (ssf.drug_label == 's-Nitro-Blebbistatin')].index,
                               inplace=False)
+"""
 # %% PCA
 ## Graphing PCA by above feature categories and getting tables
 ## run fillna block first
@@ -611,14 +633,16 @@ for key, foi in d.items():
     #T = lda.fit_transform(lda_df, y=nom_cols['drug_label'])
     T = lda.fit_transform(lda_df, y=struc_subset_filled['drug_label'])
     T_lab = PlotT(T, color_selection, graphtype='LDA',
-                  addtotitle = ': {}'.format(key), 
+                  addtotitle = f'{key}', 
                   drug_lab = struc_subset_filled['drug_label'])
     Corr_Table = GetCorrTable(struc_subset_filled[foi], T_lab, sort_by = sortby)
     exp_var_ratio = lda.explained_variance_ratio_
+    weights = lda.coef_
     LDA_results.update({'{}'.format(key): {'T_lab': T_lab,
                                             'exp_var_ratio': exp_var_ratio,
+                                            'Weights': weights,
                                             'Corr_Table': Corr_Table}})
-
+    
 # %% Get foi from top LDA features; get plot_order
  
 sort_by = 'Abs(C1)'
@@ -681,7 +705,7 @@ plot_order = ['Vehicle',
 #foi = ['str_number_of_components']                                     
 
 ## Plotting different cell sizes of different drugs
-foi = ['dna_volume', 'mem_volume']
+foi = ['str_volume_sum']
 
 ## Plot pointplots/scatter plots and returns p-values
 p_val_results = PlotScatterCI(scatter_df, foi, plot_order)
@@ -689,10 +713,11 @@ p_val_results = PlotScatterCI(scatter_df, foi, plot_order)
 # %% PLOTTING BY SCENE NUMBER OR SESSION NUMBER
 
 ## one plot per foi against scene number
-foi = ['str_number_of_components', 'str_volume_mean']
+#foi = ['str_number_of_components', 'str_volume_mean', 'str_volume_total']
+foi = ['str_volume_sum']
 struc_subset['drug_label'] = nom_cols['drug_label']
-drugs = ['Vehicle', 'Brefeldin', 'Paclitaxol', 'Staurosporine']
-drugs = ['Brefeldin']
+#drugs = ['Vehicle', 'Brefeldin', 'Paclitaxol', 'Staurosporine']
+#drugs = ['Brefeldin']
 
 time_sep = 'session_number'
 for drug in drugs:
@@ -703,11 +728,32 @@ for drug in drugs:
     plot_order = list(sorted(set(scatter_df[time_sep])))
     
     PlotScatterCI(scatter_df, foi, plot_order, groupby=time_sep, ttest=False,
-                  addtotitle=': {}'.format(drug))
+                  addtotitle=f'{drug}')
+# %% Plot all Vehicle together then Bref by session
 
+
+foi = ['str_volume_sum']
+struc_subset['drug_label'] = nom_cols['drug_label']
+#drugs = ['Vehicle', 'Brefeldin', 'Paclitaxol', 'Staurosporine']
+drugs = ['Brefeldin']
+
+time_sep = 'session_number'
+dff = struc_subset[(struc_subset.drug_label == drug) | (struc_subset.drug_label == 'Vehicle')]
+
+dff.loc[dff.drug_label == 'Vehicle', 'session_number'] = 'Vehicle'
+
+for drug in drugs:
+
+    ## Make subset of brefeldin dataset
+    scatter_df = struc_subset[(struc_subset.drug_label == drug)]
+    
+    plot_order = ['Vehicle', 1, 2, 3, 4]
+    
+    PlotScatterCI(dff, foi, plot_order, groupby=time_sep, ttest=False,
+                  addtotitle=f'{drug}')
 # %% 2D Scatter plots  
 
-plot_foi = ['str_volume_mean']
+plot_foi = ['str_number_of_components', 'str_volume_mean', 'str_volume_total']
 plot_doi = ['Vehicle']
 """
 scatter_df.drop(scatter_df.loc[scatter_df['drug_label'] == 
@@ -722,20 +768,26 @@ scatter_df = struc_subset
 scatter_df['drug_label'] = nom_cols['drug_label']
 drug = 'Vehicle'
 
-plot_foi = 'str_volume_mean'
-x_lab = ['dna_volume', 'mem_volume']
+#plot_foi = ['str_number_of_components', 'str_volume_mean', 'str_volume_total']
+plot_foi = ['str_volume_total']
+x_lab = ['dna_volume']
 
 for axis in x_lab:
-    PlotScatter2D(scatter_df, [plot_foi], drug, x_lab=axis, linreg = True, 
-                  odrreg=True)
-    
+        PlotScatter2D(scatter_df, plot_foi, drug, x_lab=axis, linreg = True, 
+                      odrreg=True)
+
+for session in list(scatter_df['session_number'].unique()):
+    dff = scatter_df.groupby('session_number').get_group(session)
+    for axis in x_lab:
+        PlotScatter2D(dff, plot_foi, drug, x_lab=axis, linreg = True, 
+                      odrreg=True, addtotitle = f'Session {session}')
+        
 # %% 3D Scatter plots                                                           ## features to plot
 
 ## 3D scatter plots over DNA volume and membrane volume
 plot_foi = STRUC_FOI  
 PlotScatter3D(scatter_df, plot_foi)
 #PlotScatter3D(struc_subset, ['structure_meridional_eccentricity'], y_lab='dna_meridional_eccentricity')
-
 
 # %% TEST AREA
 import os
