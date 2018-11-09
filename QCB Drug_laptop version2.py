@@ -17,56 +17,70 @@ Functions include:
 import sys
 import os
 
-os.chdir(r'C:\Users\Winnie\Desktop\QCB')
+os.chdir(r'\\allen\aics\microscopy\Winnie\QCB\Python Scripts')
 
 import qcbplotting as qp
 
 ## for AICS databasedataset
-#import datasetdatabase as dsdb
+import datasetdatabase as dsdb
 ## ggplot
-plt.style.use('ggplot')
+#plt.style.use('ggplot')
 
-# %% Import files from csv's 
-import_dir = r'\\allen\aics\microscopy\Winnie\Scripts and Codes\Python Scripts\QCB\Drug datasets export'
-
-df = pd.read_csv(os.path.join(import_dir, 'df.csv'), header = 0)
-ds_gol_fea.ds = pd.read_csv(os.path.join(import_dir, 'ds_gol_fea.csv'), 
-                         header = 0)
-ds_tub_fea.ds = pd.read_csv(os.path.join(import_dir, 'ds_tub_fea.csv'), 
-                         header = 0)
-ds_sec_fea.ds = pd.read_csv(os.path.join(import_dir, 'ds_sec_fea.csv'), 
-                         header = 0)
-ds_dna_fea.ds = pd.read_csv(os.path.join(import_dir, 'ds_dna_fea.csv'), 
-                         header = 0)
-ds_mem_fea.ds = pd.read_csv(os.path.join(import_dir, 'ds_mem_fea.csv'), 
-                         header = 0)
-
-# %% LOAD DATASET: Extended golgi, tubulin, sec61 dataset from Network
+# %% LOAD DATASET from Network 
 ## connect to database(prod)
 prod = dsdb.DatasetDatabase(config="//allen/aics/assay-dev/Analysis/QCB_database/prod_config.json")
 
 ## load features from golgi
 ds_meta = prod.get_dataset(name='QCB_drug_cell_meta')
 ds_dna_fea = prod.get_dataset(name='QCB_DRUG_DNA_feature')
-ds_mem_fea = prod.get_dataset(name='QCB_DRUG_CELL_feature')
+ds_cell_fea = prod.get_dataset(name='QCB_DRUG_CELL_feature')
 ds_gol_fea = prod.get_dataset(name='QCB_DRUG_ST6GAL_feature')
 ds_tub_fea = prod.get_dataset(name='QCB_DRUG_TUBA1B_feature')
 ds_sec_fea = prod.get_dataset(name='QCB_DRUG_SEC61B_feature')
+ds_actb_fea = prod.get_dataset(name='QCB_DRUG_ACTB_feature')
+ds_tjp1_fea = prod.get_dataset(name='QCB_DRUG_TJP1_feature')
+ds_myo_fea = prod.get_dataset(name='QCB_DRUG_MYH10_feature')
+ds_lamp1_fea = prod.get_dataset(name='QCB_DRUG_LAMP1_feature')
 
-# %% Making dataframe with all features and meta data
+
+# %% Import files from csv's 
+from pathlib import Path
+
+import_dir = Path(r'\\allen\aics\microscopy\Winnie\QCB\Python Scripts\Drug datasets export')
+
+df = pd.read_csv(import_dir / 'df.csv')
+ds_dna_fea = pd.read_csv(import_dir / 'ds_dna_fea.csv')
+ds_cell_fea = pd.read_csv(import_dir / 'ds_cell_fea.csv')
+
+## structure features
+struc_dfs = {}
+fea_csvs = [csv for csv in import_dir.glob('*fea.csv') 
+            if 'dna' not in csv.name and 'cell' not in csv.name]
+
+for x in fea_csvs:
+    struc_dfs[x.stem] = pd.read_csv(import_dir / x)
+    
+# %% Making dataframe with all features and meta data and save to csv
 
 ## Concatenate structure features table
+    
+#struc_fea = pd.concat(struc_dfs.values(), axis = 0)
+
 struc_fea = pd.concat([ds_gol_fea.ds,
                      ds_tub_fea.ds,
-                     ds_sec_fea.ds], axis = 0)
+                     ds_sec_fea.ds,
+                     ds_actb_fea.ds,
+                     ds_tjp1_fea.ds,
+                     ds_myo_fea.ds,
+                     ds_lamp1_fea.ds], axis = 0)
 
-## Inner join between dna and mem features
-df_dna_mem_merge = pd.merge(ds_dna_fea.ds, 
-                            ds_mem_fea.ds,
+## Inner join between dna and cell features
+df_dna_cell_merge = pd.merge(ds_dna_fea.ds, 
+                            ds_cell_fea.ds,
                             on='cell_id', how='inner')
 
-## Merge with dna/mem/struc_fea
-df_allfea_merge = pd.merge(df_dna_mem_merge, 
+## Merge with dna/cell/struc_fea
+df_allfea_merge = pd.merge(df_dna_cell_merge, 
                             struc_fea,
                             on='cell_id', how='inner')
 
@@ -77,6 +91,24 @@ df_merge = pd.merge(df_allfea_merge,
 
 ## Coerce it to dataframe
 df = pd.DataFrame(df_merge)
+
+## Save to network
+
+export_dir = r'\\allen\aics\microscopy\Winnie\QCB\Python Scripts\Drug datasets export'
+
+df.to_csv(os.path.join(export_dir, 'df.csv'), index = False)
+dff.to_csv(os.path.join(export_dir, 'dff.csv'), index = False)
+ds_dna_fea.ds.to_csv(os.path.join(export_dir, 'ds_dna_fea.csv'), index = False)
+ds_cell_fea.ds.to_csv(os.path.join(export_dir, 'ds_cell_fea.csv'), index = False)
+
+ds_gol_fea.ds.to_csv(os.path.join(export_dir, 'ds_gol_fea.csv'), index = False)
+ds_tub_fea.ds.to_csv(os.path.join(export_dir, 'ds_tub_fea.csv'), index = False)
+ds_sec_fea.ds.to_csv(os.path.join(export_dir, 'ds_sec_fea.csv'), index = False)
+ds_actb_fea.ds.to_csv(os.path.join(export_dir, 'ds_actb_fea.csv'), index = False)
+ds_tjp1_fea.ds.to_csv(os.path.join(export_dir, 'ds_tjp1_fea.csv'), index = False)
+ds_myo_fea.ds.to_csv(os.path.join(export_dir, 'ds_myo_fea.csv'), index = False)
+ds_lamp1_fea.ds.to_csv(os.path.join(export_dir, 'ds_lamp1_fea.csv'), index = False)
+
 
 
 # %% Cell volume and dna volume analysis from different drugs
@@ -102,9 +134,9 @@ counts_table = qp.GetConditionCounts('structure_name')
 
 dff = df
 dff = dff.fillna(0, inplace=False)
-dff['cell_to_dna_volume'] = dff['mem_volume']/dff['dna_volume']
+dff['cell_to_dna_volume'] = dff['cell_volume']/dff['dna_volume']
 #dff['drug_label'] = dff['drug_label'].replace({'S-Nitro-Blebbistatin': 's-Nitro-Blebbistatin'})
-features = ['dna_volume', 'mem_volume', 'cell_to_dna_volume']
+features = ['dna_volume', 'cell_volume', 'cell_to_dna_volume']
 groupby = 'structure_name'
 
 plot_order = qp.GetPlotOrder(dff, 'Vehicle')
@@ -138,7 +170,7 @@ f_value, p_value = stats.f_oneway(sec61b[param], betaactin[param],
 
 DMSO_subset = dff[(dff.drug_label == 'Vehicle')]
 
-features = ['dna_volume', 'mem_volume', 'cell_to_dna_volume']
+features = ['dna_volume', 'cell_volume', 'cell_to_dna_volume']
 groupby = 'structure_name'
 plot_order = list(DMSO_subset['structure_name'].unique())
 
@@ -171,20 +203,33 @@ NOM_COLS = ['drug_label', 'cell_id', 'cell_ver', 'czi_filename',
             'idx_in_stack', 'roi', 'str_ver', 'structure_name']
 
 ## Features of interest
-STRUC_FEA_DIC = {'golgi': list(ds_gol_fea),
-                 'tubulin': list(ds_tub_fea),
-                 'sec61b': list(ds_sec_fea)}
+
+STRUC_FEA_DIC = {}
+for key, data in struc_dfs.items():
+    STRUC_FEA_DIC[f'{key}'] = list(data)
+    
+
+
+STRUC_MAP = {'golgi': 'ds_gol_fea',
+             'tubulin': 'ds_tub_fea',
+             'sec61b': 'ds_sec_fea',
+             'beta-actin': 'ds_actb_fea',
+             'zo1': 'ds_tjp1_fea)',
+             'myosin': 'ds_myo_fea',
+             'lamp1': 'ds_lamp1_fea'}
+
+
 
 DNA_FOI = list(ds_dna_fea)
 DNA_FOI.remove('cell_id')
 
-MEM_FOI = list(ds_mem_fea)
-MEM_FOI.remove('cell_id')
+CELL_FOI = list(ds_cell_fea)
+CELL_FOI.remove('cell_id')
 
-STRUC_FOI = STRUC_FEA_DIC.get(STRUCTURE)
+STRUC_FOI = STRUC_FEA_DIC.get(STRUC_MAP.get(STRUCTURE))
 STRUC_FOI.remove('cell_id')
 
-ALL_FOI = DNA_FOI + MEM_FOI + STRUC_FOI
+ALL_FOI = DNA_FOI + CELL_FOI + STRUC_FOI
 
 ## Which FOI list to use
 FOI = ALL_FOI
@@ -215,7 +260,7 @@ struc_subset = df.groupby(by='structure_name').get_group(STRUCTURE)
 ## Save out nominal columns
 nom_cols = struc_subset[NOM_COLS]
 
-## fill struc_subset with DNA, MEM, and STR features
+## fill struc_subset with DNA, CELL, and STR features
 struc_subset = struc_subset[ALL_FOI]
 
 """
@@ -301,8 +346,8 @@ foi = ['str_1st_axis_length_mean',
 """
 ## Dictionary of feature grouping
 d = {'DNA Features': DNA_FOI, 
-     'MEM Features': MEM_FOI,
-     'DNA and MEM Features': DNA_FOI + MEM_FOI,
+     'CELL Features': CELL_FOI,
+     'DNA and CELL Features': DNA_FOI + CELL_FOI,
      'Structure Features': STRUC_FOI,
      'All Features': ALL_FOI,
      'Selected Structure Features': foi}
@@ -511,22 +556,13 @@ for session in list(scatter_df['session_number'].unique()):
         
 # %% 3D Scatter plots                                                           ## features to plot
 
-## 3D scatter plots over DNA volume and membrane volume
+## 3D scatter plots over DNA volume and cell volume
 plot_foi = STRUC_FOI  
 qp.PlotScatter3D(scatter_df, plot_foi)
 #PlotScatter3D(struc_subset, ['structure_meridional_eccentricity'], y_lab='dna_meridional_eccentricity')
 
 # %% TEST AREA
-import os
 
-export_dir = r'C:\Users\winniel\Desktop\Drug datasets export'
-df.to_csv(os.path.join(export_dir, 'df.csv'), index = False)
-dff.to_csv(os.path.join(export_dir, 'dff.csv'), index = False)
-ds_gol_fea.ds.to_csv(os.path.join(export_dir, 'ds_gol_fea.csv'), index = False)
-ds_tub_fea.ds.to_csv(os.path.join(export_dir, 'ds_tub_fea.csv'), index = False)
-ds_sec_fea.ds.to_csv(os.path.join(export_dir, 'ds_sec_fea.csv'), index = False)
-ds_dna_fea.ds.to_csv(os.path.join(export_dir, 'ds_dna_fea.csv'), index = False)
-ds_mem_fea.ds.to_csv(os.path.join(export_dir, 'ds_mem_fea.csv'), index = False)
 # %%
 # Parallel Coordinates Start Here:
 plt.figure()
