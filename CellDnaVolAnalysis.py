@@ -12,7 +12,7 @@ Analysis on cell size and dna volume with all drugs and structures
 ## first step: make sure you can aggregate the different structures
 ## plot cell_volume, DNA_volume, scaled cell_volume/dnavolume against drug
 
-import_dir = r'\\allen\aics\microscopy\Winnie\Scripts and Codes\Python Scripts\QCB\Drug datasets export'
+import_dir = r'\\allen\aics\microscopy\Winnie\QCB\Python Scripts\Drug datasets export'
 
 df = pd.read_csv(os.path.join(import_dir, 'old_df.csv'), header = 0)
 
@@ -30,9 +30,9 @@ counts_table = GetConditionCounts('structure_name')
 
 dff = df
 dff = dff.fillna(0, inplace=False)
-dff['cell_to_dna_volume'] = dff['mem_volume']/dff['dna_volume']
+dff['cell_to_dna_volume'] = dff['cell_volume']/dff['dna_volume']
 #dff['drug_label'] = dff['drug_label'].replace({'S-Nitro-Blebbistatin': 's-Nitro-Blebbistatin'})
-features = ['dna_volume', 'mem_volume', 'cell_to_dna_volume']
+features = ['dna_volume', 'cell_volume', 'cell_to_dna_volume']
 groupby = 'structure_name'
 
 plot_order = list(dff['structure_name'].unique())
@@ -68,7 +68,7 @@ f_value, p_value = stats.f_oneway(sec61b[param], betaactin[param],
 
 DMSO_subset = dff[(dff.drug_label == 'Vehicle')]
 
-features = ['dna_volume', 'mem_volume', 'cell_to_dna_volume']
+features = ['dna_volume', 'cell_volume', 'cell_to_dna_volume']
 groupby = 'structure_name'
 plot_order = list(DMSO_subset['structure_name'].unique())
 
@@ -92,3 +92,22 @@ for par in features:
                                       tubulin[par], zo1[par])
     anova_test.update({f'{par}':{'f_value': f_value,
                                    'p_value': p_value}})
+
+# %% Extract each group by drug_label and plot confidence CI
+    
+os.chdir(r'\\allen\aics\microscopy\Winnie\QCB\Python Scripts')
+savedir = r'C:\Users\winniel\Desktop\graphs'
+
+#import qcbplotting as qp
+    
+drugs = dff['drug_label'].unique()
+features = ['dna_volume', 'cell_volume', 'cell_to_dna_volume']
+
+for drug in drugs:
+    drug_subset = dff.groupby('drug_label').get_group(drug)
+
+    qp.PlotScatterCI(drug_subset, features, groupby='structure_name', 
+                  addtotitle=f'{drug}', plotallstruc=True, plot_order=None,
+                  savegraphs=True, savedir=savedir)
+    
+
