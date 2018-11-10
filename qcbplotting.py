@@ -153,10 +153,11 @@ def GetPlotOrder(df, control, by='drug_label'):
 
 ## Plot Scatter plot for each category with 95% confidence interval
 def PlotScatterCI(df, features, control='Vehicle', groupby='drug_label', 
-                  addtotitle=None, plotallstruc=False, plot_order=""):
+                  addtotitle=None, plotallstruc=False, plot_order="",
+                  savegraphs=False, savedir=''):
     
     if plot_order == "":
-        plot_order = GetPlotOrder(df, control)
+        plot_order = GetPlotOrder(df, control, by=groupby)
     
     # Set up the matplotlib figure
     sns.set(style="darkgrid")
@@ -190,6 +191,10 @@ def PlotScatterCI(df, features, control='Vehicle', groupby='drug_label',
         sns.stripplot(x=groupby, y=feature, data=df, jitter=True,
                           palette="Pastel1", edgecolor='k', size=5, 
                           order=plot_order)
+        
+        if savegraphs:
+            fig.set_size_inches(10,6)
+            fig.savefig(os.path.join(savedir, f'{feature}__{addtotitle}.png'))
 
 ## 2D scatter plot: dff = dataset, plot_foi = list of features to plot
 ## x and y_lab are feature names on x and y axis
@@ -255,7 +260,8 @@ def PlotScatter2D(dff, plot_foi, *doi, x_lab='dna_volume', linreg=False,
                     y_fit = linear_f(out.beta, x)
                     #y_fit = linear_f(out.beta, x_norm)
                     #ax.plot(x, y_fit*np.mean(y), c='k', label='ODR')
-                    ax.plot(x, y_fit, c='k', label=f'ODR. $R^2$: {r_sq:.3f}')
+                    odrslope = out.beta[0]
+                    ax.plot(x, y_fit, c='k', label=f'ODR. $R^2$: {r_sq:.3f}, slope={odrslope:.3f}')
 
             except:
                 print(f'Skipped plotting {drug}')
