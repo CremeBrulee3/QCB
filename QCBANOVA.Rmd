@@ -1,0 +1,239 @@
+---
+title: "QCB Structure and Drug ANOVA"
+output: html_notebook
+---
+
+```{r}
+
+if(!require(dplyr)){install.packages("dplyr")}
+if(!require(FSA)){install.packages("FSA")}
+if(!require(car)){install.packages("car")}
+if(!require(agricolae)){install.packages("agricolae")}
+if(!require(multcomp)){install.packages("multcomp")}
+if(!require(DescTools)){install.packages("DescTools")}
+if(!require(lsmeans)){install.packages("lsmeans")}
+if(!require(multcompView)){install.packages("multcompView")}
+if(!require(Rmisc)){install.packages("Rmisc")}
+if(!require(ggplot2)){install.packages("ggplot2")}
+if(!require(pwr)){install.packages("pwr")}
+
+```
+
+Function to run anova and tukey and save results to csv
+```{r}
+Run1AnovaTukey <- function(df, x1, y1, group) {
+  x = unlist(df[x1])
+  y = unlist(df[y1])
+  
+  ## model on y as function of different x
+  AOV <- aov(y ~ x, data = df)
+  
+  ## Tukey gives pairwise comparison of different x groups as measured by y
+  tukeyres <- TukeyHSD(AOV, conf.level = 0.95)
+  result <- as.data.frame(tukeyres$x)
+  write.csv(result, paste(y1, group, '1anovatukey.csv', sep = '__'))
+}
+```
+
+Function to run initial anova to see if there's overall difference between groups
+```{r}
+Run1Anova <- function(df, x1, y1, group){
+  x = unlist(df[x1])
+  y = unlist(df[y1])
+  
+  ## y as a function of x - see if difference in x affect y
+  model <- lm(y ~ x, data = df)
+  
+  # gives pairwise comparison of x groups to reference group (first column)
+  print(summary(model)) 
+  AOV <- anova(model)
+  print(AOV) # gives overall significance if there are differences based on x
+  
+}
+
+```
+
+Two Way Anova function to show if there's overall difference between x_1 and x_2 grouping
+```{r}
+
+Run2AnovaTukey <- function(df, x_1, x_2, y_1){
+  x1 = unlist(df[x_1])
+  x2 = unlist(df[x_2])
+  y = unlist(df[y_1])
+  AOV2 <- aov(y ~ x1 + x2, data = df)
+  print(summary(AOV2))
+  tukeyresult <- TukeyHSD(AOV2, conf.level=0.95)
+  result1 <- as.data.frame(tukeyresult$x1)
+  result2 <- as.data.frame(tukeyresult$x2)
+
+  write.csv(result1, paste(y_1, x_1, '2anova.csv', sep = '__'))
+  write.csv(result2, paste(y_1, x_2, '2anova.csv', sep = '__'))
+
+}
+
+```
+
+Reading csv file to load df
+
+```{r}
+setwd("//allen/aics/microscopy/Winnie/QCB/Python Scripts/Drug datasets export")
+
+df <- read.csv('dff.csv', sep = ",", header = TRUE, stringsAsFactors = F)
+df
+```
+
+To get list of column names in df
+```{r}
+str(df) 
+
+```
+
+Fitting linear model. However no AICS-0 as control, so results are giving significance of each to beta-actin group (reference)
+
+Following line will run an ANOVA across groups separated by "structure_name" based on "cell_volume" measurements
+```{r}
+Run1Anova(df, 'structure_name', 'cell_volume')
+
+```
+
+ANOVA across groups separated by "structure_name" based on "dna_volume" measurements on dna_volume
+
+```{r}
+Run1Anova(df, 'structure_name', 'dna_volume')
+```
+
+ANOVA across groups separated by "structure_name" based on "cell_to_dna_volume" measurements on dna_volume
+
+```{r}
+Run1Anova(df, 'structure_name', 'cell_to_dna_volume')
+```
+
+All cell_vol, dna_vol, and celltodna_vol show statistical significance...
+
+Do post-hoc TukeyHSD across groups separated by "structure_name"
+on all three parameters to find which pairing are stat. sign. and save the resulting csv's
+
+```{r}
+# directory to save resulting csv's to
+setwd("C:/Users/winniel/Desktop/test")
+
+
+for (feature in list('cell_volume', 'dna_volume', 'cell_to_dna_volume')) {
+  Run1AnovaTukey(df, 'structure_name', feature, 'alldrugs')
+  
+}
+
+```
+
+Run Anova Tukey on just DMSO control group based on measurements in 'cell_volume', 'dna_volume', 'cell_to_dna_volume'
+```{r}
+
+DMSO.subset <- subset(df, df$drug_label == 'Vehicle')
+
+for (feature in list('cell_volume', 'dna_volume', 'cell_to_dna_volume')) {
+  Run1Anova(DMSO.subset, 'structure_name', feature)
+}
+```
+
+ANOVA TUkey on DMSO - only cell to dna volume has stat. significance and need to be ran
+```{r}
+# Directory to save resulting csv's to 
+setwd("C:/Users/winniel/Desktop/test")
+
+for (feature in list('cell_to_dna_volume')) {
+  Run1AnovaTukey(DMSO.subset, 'structure_name', feature, 'Vehicle')
+}
+```
+
+
+
+Run 2 way ANOVA assuming interaction first between 2 factors.
+Result shows interaction not significant, re-run ANOVA model based on independance between factors
+```{r}
+setwd("C:/Users/winniel/Desktop/test")
+for (feature in list('cell_volume', 'dna_volume', 'cell_to_dna_volume')) {
+  Run2AnovaTukey(df, 'structure_name', 'drug_label', feature)
+}
+```
+
+No interaction of x1 and x2 under cell_volume, went back to do pairwise anova comparison 
+based on no interaction (changed in method; y~ x1*x2 to y~ x1+x2)
+
+```{r}
+Run2AnovaTukey(df, 'structure_name', 'drug_label', 'cell_volume')
+```
+
+
+Need to separate each cell line and run 1 way anova with dunnett test (compare each drug to DMSO)
+
+
+```{r}
+# Directory to save results
+setwd("C:/Users/winniel/Desktop/test")
+
+structures <- unique(df$structure_name)
+
+for (structure in structures){
+  strucsubset <- subset(df, df$structure_name == structure)
+  
+  drugs = unique(strucsubset$drug_label)
+  
+  ## Set levels
+  levels = c('Vehicle')
+
+  for (i in 1:length(drugs)) {
+    if (drugs[i] != 'Vehicle'){
+      levels[length(levels)+1] = drugs[i]
+    }
+  }
+  strucsubset$drug_label = ordered(strucsubset$drug_label, levels = levels)
+  
+  for (feature in list('cell_volume', 'dna_volume', 'cell_to_dna_volume')) {
+    ## Dunnett's test
+
+    duntest <- DunnettTest(unlist(strucsubset[feature]), unlist(strucsubset['drug_label']), conf.level = 0.95)
+    Results <- as.data.frame(duntest$Vehicle)
+    write.csv(Results, paste(toString(structure), feature, 'duntest.csv', sep='__'))
+  }
+}
+
+```
+Initial anova results on different structures per drug group 
+
+```{r}
+# directory to save results to
+setwd("C:/Users/winniel/Desktop/test")
+
+drugs <- unique(df$drug_label)
+
+for (drug in drugs){
+  drugsubset <- subset(df, df$drug_label == drug)
+  
+  for (feature in list('cell_volume', 'dna_volume', 'cell_to_dna_volume')){
+    Run1Anova(drugsubset, 'structure_name', feature, drug)
+    
+  }
+}
+```
+
+Run 1-way anova with post-hoc Tukey on different structures per drug group
+
+```{r}
+# directory to save results
+
+setwd("C:/Users/winniel/Desktop/test")
+
+
+
+for (drug in drugs){
+  drugsubset <- subset(df, df$drug_label == drug)
+  
+  for (feature in list('cell_volume', 'dna_volume', 'cell_to_dna_volume')){
+    Run1AnovaTukey(drugsubset, 'structure_name', feature, drug)
+    
+  }
+}
+
+```
+
+
